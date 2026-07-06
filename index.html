@@ -65,6 +65,12 @@ th{color:var(--sub); font-weight:600; font-size:12px;}
 .thumb{width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--line); cursor:pointer;}
 .pct{font-weight:800;}
 @media(min-width:700px){ .grid2{grid-template-columns:repeat(4,1fr);} }
+#printarea{display:none;}
+@media print{
+  header,nav,main,#modal,#modalbg{display:none!important;}
+  body{background:#fff; padding:0;}
+  #printarea{display:block!important;}
+}
 </style>
 </head>
 <body>
@@ -82,6 +88,7 @@ th{color:var(--sub); font-weight:600; font-size:12px;}
 </nav>
 <div id="modalbg" onclick="closeModal()"></div>
 <div id="modal"></div>
+<div id="printarea"></div>
 
 <script>
 /* ================= 預設設定 ================= */
@@ -90,21 +97,18 @@ function DEF(){ return {
   rates:{g2:50, g:55, rental:150},
   topics:['直路控制','轉彎','平行泊車','斜路泊車','倒後入位','三點掉頭','高速公路','轉線','路口讓先','緊急停車','路試路線','夜駕','雨天駕駛'],
   centres:['Port Union','Metro East (Scarborough)','Downsview','Etobicoke','Newmarket','Brampton','Oshawa','其他'],
+  cv:3,
   curriculum:[
-    {t:'第1堂：基本控制與儀表',k:['直路控制','轉彎']},
-    {t:'第2堂：轉彎與路口讓先',k:['轉彎','路口讓先']},
-    {t:'第3堂：住宅區綜合練習',k:['直路控制','路口讓先']},
-    {t:'第4堂：三點掉頭',k:['三點掉頭']},
-    {t:'第5堂：倒後入位',k:['倒後入位']},
-    {t:'第6堂：平行泊車',k:['平行泊車']},
-    {t:'第7堂：斜路泊車與起步',k:['斜路泊車']},
-    {t:'第8堂：緊急停車與危險應對',k:['緊急停車']},
-    {t:'第9堂：轉線與盲點',k:['轉線']},
-    {t:'第10堂：高速公路（上落匝道）',k:['高速公路']},
-    {t:'第11堂：高速公路（轉線超車）',k:['高速公路','轉線']},
-    {t:'第12堂：夜駕與雨天',k:['夜駕','雨天駕駛']},
-    {t:'第13堂：路試路線演練',k:['路試路線']},
-    {t:'第14堂：模擬路試',k:['路試路線']}],
+    {t:'G2 第1堂',track:'G2',k:[]},
+    {t:'G2 第2堂',track:'G2',k:[]},
+    {t:'G2 第3堂',track:'G2',k:[]},
+    {t:'G2 第4堂',track:'G2',k:[]},
+    {t:'G2 第5堂',track:'G2',k:[]},
+    {t:'Full G 第1堂',track:'G',k:[]},
+    {t:'Full G 第2堂',track:'G',k:[]},
+    {t:'Full G 第3堂',track:'G',k:[]},
+    {t:'Full G 第4堂',track:'G',k:[]},
+    {t:'Full G 第5堂',track:'G',k:[]}],
   checks:{
     '三點掉頭':['睇鏡','打燈','睇盲點','選位安全','轉向控制','完成回正'],
     '平行泊車':['打燈','倒後觀察','入位角度','中途調整','距路邊30cm內'],
@@ -127,6 +131,7 @@ let VIEW_STUDENT = null;
 let SEARCH = '';
 let TMP_CHECKS = {};
 let TMP_PHOTOS = [];
+let TMP_RATES = {};
 
 function load(){
   let d;
@@ -135,6 +140,10 @@ function load(){
   const def=DEF();
   d.config = d.config || {};
   for(const k in def){ if(d.config[k]===undefined) d.config[k]=def[k]; }
+  // v3遷移：舊14堂課程表（冇track欄位）自動換做G2/Full G雙軌
+  const cur=d.config.curriculum||[];
+  if(cur.length && !cur.some(c=>c.track)){ d.config.curriculum=def.curriculum; }
+  d.config.cv=3;
   return d;
 }
 function blank(){ return {students:[], lessons:[], payments:[], exams:[], config:DEF()}; }
@@ -161,6 +170,12 @@ function pctOf(l){
   return t?Math.round(k/t*100):null;
 }
 function pctColor(p){ return p>=80?'var(--green)':p>=50?'var(--amber)':'var(--red)'; }
+function gmap(q){ if(!q){alert('未有地址');return;} window.open('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q),'_blank'); }
+function gmapS(id){ const s=stu(id); gmap(s&&s.address); }
+function gmapL(id){ const l=DB.lessons.find(x=>x.id===id); gmap(l&&l.loc); }
+function avgR(l){ if(!l.ratings) return null; const v=Object.values(l.ratings).filter(x=>x>0); return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length*10)/10:null; }
+function mv(key,i,d){ const a=cfg()[key]; const j=i+d; if(j<0||j>=a.length) return; const tmp=a[i]; a[i]=a[j]; a[j]=tmp; save(); }
+function starStr(n){ return '★'.repeat(n)+'☆'.repeat(5-n); }
 
 /* ================= 頁面切換 ================= */
 document.getElementById('nav').addEventListener('click', e=>{
@@ -211,7 +226,7 @@ function vDash(){
     <div class="item row"><span class="tag ${x.tag==='今日'?'g':'a'}">${x.tag}</span><b>${x.l.start}</b>
       <span>${esc(stuName(x.l.studentId))}</span>
       ${x.l.ltype?`<span class="tag">${esc(x.l.ltype)}</span>`:''}<span class="muted">${x.l.dur}小時</span>
-      ${x.l.loc?`<span class="muted">📍 ${esc(x.l.loc)}</span>`:''}
+      ${x.l.loc?`<span class="muted">📍 ${esc(x.l.loc)}</span><button class="btn green sm" onclick="gmapL('${x.l.id}')">🗺️</button>`:''}
       <button class="btn sm right" onclick="gcal('${x.l.id}')">📅</button></div>`).join('')}</div>`:'';
 
   // 考試倒數
@@ -287,14 +302,16 @@ function vStudentDetail(id){
   const o=owedOf(id);
   const past=lessons.filter(isPast);
   const lastFocus=past.length&&past[0].nextFocus?past[0].nextFocus:'';
+  const lastTitle=past.length&&past[0].title?past[0].title:'';
   return `
   <button class="btn grey sm" onclick="VIEW_STUDENT=null;render()">← 返回學生列表</button>
   <div class="card" style="margin-top:10px">
     <div class="row"><b style="font-size:18px">${esc(s.name)}</b>
       <span class="tag ${s.status==='已考牌'?'g':s.status==='暫停'?'r':''}">${esc(s.status||'學緊')}</span>
       <span class="tag a">${esc(s.stage||'G2')}</span>
+      ${lastTitle?`<span class="tag g">上到：${esc(lastTitle)}</span>`:''}
       <button class="btn grey sm right" onclick="formStudent('${id}')">編輯</button></div>
-    <div class="muted" style="margin-top:6px">📞 ${esc(s.phone||'—')} · ✉️ ${esc(s.email||'—')}<br>📍 ${esc(s.address||'—')}<br>🏁 考試中心：${esc(s.centre||'未定')}</div>
+    <div class="muted" style="margin-top:6px">📞 ${esc(s.phone||'—')} · ✉️ ${esc(s.email||'—')}<br>📍 ${esc(s.address||'—')}${s.address?` <a onclick="gmapS('${id}')" style="color:var(--blue);cursor:pointer;font-weight:700">🗺️ 導航</a>`:''}<br>🏁 考試中心：${esc(s.centre||'未定')}</div>
     ${s.notes?`<div style="margin-top:6px;font-size:13px">📝 ${esc(s.notes)}</div>`:''}
     ${(s.photos||[]).length?`<div class="row" style="margin-top:8px">${s.photos.map(p=>`<img class="thumb" src="${p.data}" onclick="viewPhoto('${id}','${p.id}')">`).join('')}</div>`:''}
     ${lastFocus?`<div style="margin-top:8px;padding:8px;background:#fdf3e3;border-radius:8px;font-size:13px"><b>⭐ 下堂加強：</b>${esc(lastFocus)}</div>`:''}
@@ -317,10 +334,12 @@ function vStudentDetail(id){
   <div class="card"><h3>📖 每堂記錄（新→舊）</h3>
   ${lessons.length?lessons.map(l=>{
     const pct=pctOf(l);
+    const ar=avgR(l);
     return `
     <div class="item">
       <div class="row"><b>${l.date} ${l.start}</b>${l.ltype?`<span class="tag">${esc(l.ltype)}</span>`:''}<span class="muted">${l.dur}小時 · ${money(l.fee||0)}</span>
         ${isPast(l)?'':'<span class="tag a">未上</span>'}
+        ${ar!=null?`<span class="tag a">⭐${ar}</span>`:''}
         ${pct!=null?`<span class="pct right" style="color:${pctColor(pct)}">動作 ${pct}%</span>`:''}
         ${l.score?`<span class="score ${pct!=null?'':'right'}">${'★'.repeat(l.score)}${'☆'.repeat(5-l.score)}</span>`:''}</div>
       ${l.title?`<div style="font-size:13px;margin-top:2px;font-weight:600;color:var(--blue)">📚 ${esc(l.title)}</div>`:''}
@@ -329,7 +348,8 @@ function vStudentDetail(id){
       ${l.nextFocus?`<div style="font-size:13px;margin-top:2px;color:var(--amber)">⭐ 下堂加強：${esc(l.nextFocus)}</div>`:''}
       <div class="row" style="margin-top:6px">
         <button class="btn grey sm" onclick="formLesson('${l.id}')">✏️ 編輯/補填</button>
-        <button class="btn sm" onclick="gcal('${l.id}')">📅 加入Google日曆</button>
+        <button class="btn sm" onclick="gcal('${l.id}')">📅 日曆</button>
+        ${isPast(l)?`<button class="btn amber sm" onclick="lessonSum('${l.id}')">📄 堂擇要</button>`:''}
         <button class="btn red sm right" onclick="delLesson('${l.id}')">刪除</button></div>
     </div>`;}).join(''):'<div class="muted">未有記錄</div>'}</div>
   <div class="card"><h3>💰 學費記錄</h3>
@@ -393,6 +413,66 @@ function copyRpt(){
 }
 function shareRpt(){ navigator.share({text:document.getElementById('rpt').value}); }
 
+/* ================= 每堂擇要（俾學生） ================= */
+function sumData(lid){
+  const l=DB.lessons.find(x=>x.id===lid); if(!l) return null;
+  const s=stu(l.studentId)||{name:''};
+  const items=(l.topics||[]).map(t=>({t, r:(l.ratings||{})[t]||0}));
+  const missed=[];
+  if(l.checks) for(const tp in l.checks) for(const i in l.checks[tp]) if(!l.checks[tp][i]) missed.push(tp+'－'+i);
+  const pct=pctOf(l), ar=avgR(l);
+  return {l,s,items,missed,pct,ar};
+}
+function sumText(lid){
+  const d=sumData(lid); if(!d) return '';
+  let t='📄 學車堂擇要\n━━━━━━━━━━━━━━\n';
+  t+='學生：'+d.s.name+'\n日期：'+d.l.date+' '+d.l.start+'（'+d.l.dur+'小時）\n';
+  if(d.l.title) t+='課程：'+d.l.title+'\n';
+  t+='\n📚 本堂項目及評分：\n';
+  t+=d.items.length?d.items.map(x=>'・'+x.t+'：'+(x.r?starStr(x.r)+'（'+x.r+'/5）':'未評')).join('\n'):'（未有記錄）';
+  if(d.missed.length) t+='\n\n⚠️ 做得未夠好（要留意）：\n'+d.missed.map(m=>'・'+m).join('\n');
+  if(d.l.problems) t+='\n\n❗ 本堂問題：'+d.l.problems;
+  if(d.l.nextFocus) t+='\n\n⭐ 下堂要改善：'+d.l.nextFocus;
+  t+='\n\n━━━━━━━━━━━━━━\n📊 本堂總結：';
+  if(d.ar!=null) t+='平均評分 '+d.ar+'/5星';
+  if(d.pct!=null) t+=(d.ar!=null?'　·　':'')+'動作完成率 '+d.pct+'%';
+  if(d.ar==null&&d.pct==null) t+='（未有評分記錄）';
+  return t;
+}
+function lessonSum(lid){
+  const d=sumData(lid); if(!d){alert('搵唔到呢堂');return;}
+  openModal(`<h3>📄 ${esc(d.s.name)} 堂擇要（${d.l.date}）</h3>
+  <textarea id="rpt" rows="14" readonly style="font-size:13px;margin-top:8px">${esc(sumText(lid))}</textarea>
+  <div class="row" style="margin-top:12px">
+    <button class="btn" onclick="copyRpt()">📄 複製</button>
+    <button class="btn amber" onclick="printSum('${lid}')">🖨️ 出PDF</button>
+    ${navigator.share?'<button class="btn green" onclick="shareRpt()">📤 分享</button>':''}
+    <button class="btn grey right" onclick="closeModal()">關閉</button></div>
+  <p class="muted" style="margin-bottom:0">出PDF：撳「出PDF」→ 列印畫面 → 揀「儲存為PDF」（iPhone喺列印預覽向外揑開再撳分享）。</p>`);
+}
+function printSum(lid){
+  const d=sumData(lid); if(!d) return;
+  const rows=d.items.map(x=>`<tr><td>${esc(x.t)}</td><td style="color:#d97706">${x.r?starStr(x.r):'—'}</td><td>${x.r?x.r+'/5':'未評'}</td></tr>`).join('');
+  document.getElementById('printarea').innerHTML=`
+  <div style="font-family:-apple-system,'PingFang HK',sans-serif;padding:24px;color:#111">
+    <h2 style="margin:0">🚗 學車堂擇要</h2>
+    <p style="margin:6px 0;color:#555">學生：<b>${esc(d.s.name)}</b>　日期：${d.l.date} ${d.l.start}（${d.l.dur}小時）${d.l.title?'　課程：'+esc(d.l.title):''}</p>
+    <hr>
+    <h3>📚 本堂項目及評分</h3>
+    <table border="0" cellpadding="6" style="border-collapse:collapse;width:100%">
+      <tr style="border-bottom:2px solid #333"><th align="left">項目</th><th align="left">星級</th><th align="left">分數</th></tr>
+      ${rows||'<tr><td colspan="3">未有記錄</td></tr>'}
+    </table>
+    ${d.missed.length?`<h3>⚠️ 做得未夠好</h3><ul>${d.missed.map(m=>'<li>'+esc(m)+'</li>').join('')}</ul>`:''}
+    ${d.l.problems?`<h3>❗ 本堂問題</h3><p>${esc(d.l.problems)}</p>`:''}
+    ${d.l.nextFocus?`<h3>⭐ 下堂要改善</h3><p>${esc(d.l.nextFocus)}</p>`:''}
+    <hr>
+    <h3>📊 本堂總結：${d.ar!=null?'平均 '+d.ar+'/5星':''}${d.pct!=null?'　動作完成率 '+d.pct+'%':''}</h3>
+    <p style="color:#888;font-size:12px">報告產生日期：${todayStr()}</p>
+  </div>`;
+  window.print();
+}
+
 /* ================= 排堂頁 ================= */
 function vSchedule(){
   const up=DB.lessons.filter(l=>!isPast(l)).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
@@ -407,7 +487,7 @@ function vSchedule(){
     <div class="item">
       <div class="row"><b>${l.date} ${l.start}</b><span>${esc(stuName(l.studentId))}</span><span class="muted">${l.dur}小時</span></div>
       ${l.title?`<div class="muted">📚 ${esc(l.title)}</div>`:''}
-      ${l.loc?`<div class="muted">📍 ${esc(l.loc)}</div>`:''}
+      ${l.loc?`<div class="muted">📍 ${esc(l.loc)} <a onclick="gmapL('${l.id}')" style="color:var(--blue);cursor:pointer;font-weight:700">🗺️ 導航</a></div>`:''}
       <div class="row" style="margin-top:6px">
         <button class="btn sm" onclick="gcal('${l.id}')">📅 加入Google日曆</button>
         <button class="btn grey sm" onclick="formLesson('${l.id}')">改</button>
@@ -457,16 +537,31 @@ function vSettings(){
     <label>考試日租車費 (CAD)</label><input id="s_rental" type="number" inputmode="decimal" value="${cfg().rates.rental}">
     <button class="btn sm" style="margin-top:10px" onclick="cfg().rates={g2:Number(val('s_g2'))||0,g:Number(val('s_g'))||0,rental:Number(val('s_rental'))||0};save();alert('已更新收費')">儲存收費</button>
     <p class="muted" style="margin-bottom:0">G2/G堂預設2小時，考試日預設3小時。<br>考試日收費 = 租車費 + 時數 × 該牌時薪（例：G2考試3小時 = $${cfg().rates.rental} + 3×$${cfg().rates.g2} = $${cfg().rates.rental+3*cfg().rates.g2}）。排堂時金額仍可逐堂自己改。</p></div>
-  <div class="card"><h3>📚 教學項目管理</h3>
-    <div>${cfg().topics.map((t,i)=>`<span class="tag">${esc(t)}<span class="x" onclick="delTopic(${i})">✕</span></span>`).join('')}</div>
+  <div class="card"><h3>📚 教學項目管理（↑↓排次序）</h3>
+    ${cfg().topics.map((t,i)=>`<div class="item row"><span style="font-size:14px">${esc(t)}</span>
+      <span class="right"></span>
+      <button class="btn grey sm" onclick="mv('topics',${i},-1)">↑</button>
+      <button class="btn grey sm" onclick="mv('topics',${i},1)">↓</button>
+      <button class="btn red sm" onclick="delTopic(${i})">✕</button></div>`).join('')}
     <button class="btn sm" style="margin-top:8px" onclick="addTopic()">＋ 加教學項目</button></div>
-  <div class="card"><h3>🏁 考試中心管理</h3>
-    <div>${cfg().centres.map((c,i)=>`<span class="tag a">${esc(c)}<span class="x" onclick="delCentre(${i})">✕</span></span>`).join('')}</div>
+  <div class="card"><h3>🏁 考試中心管理（↑↓排次序）</h3>
+    ${cfg().centres.map((c,i)=>`<div class="item row"><span style="font-size:14px">${esc(c)}</span>
+      <span class="right"></span>
+      <button class="btn grey sm" onclick="mv('centres',${i},-1)">↑</button>
+      <button class="btn grey sm" onclick="mv('centres',${i},1)">↓</button>
+      <button class="btn red sm" onclick="delCentre(${i})">✕</button></div>`).join('')}
     <button class="btn sm" style="margin-top:8px" onclick="addCentre()">＋ 加考試中心</button></div>
-  <div class="card"><h3>📖 標準課程表管理</h3>
-    ${cfg().curriculum.map((c,i)=>`<div class="item row"><b style="font-size:13px">${esc(c.t)}</b>
-      <span class="muted">${c.k.map(esc).join('、')}</span>
-      <span class="x right" style="color:var(--red);cursor:pointer;font-weight:700" onclick="delCurr(${i})">✕</span></div>`).join('')}
+  <div class="card"><h3>📖 課程表管理（G2 / Full G各5堂，內容自己定）</h3>
+    <p class="muted">撳✏️改堂名同教學內容。排堂時揀咗堂，內容自動剔好。</p>
+    ${cfg().curriculum.map((c,i)=>`<div class="item row">
+      <span class="tag ${c.track==='G'?'g':''}">${c.track==='G'?'Full G':'G2'}</span>
+      <b style="font-size:13px">${esc(c.t)}</b>
+      <span class="muted">${(c.k||[]).map(esc).join('、')||'（內容未定）'}</span>
+      <span class="right"></span>
+      <button class="btn grey sm" onclick="mv('curriculum',${i},-1)">↑</button>
+      <button class="btn grey sm" onclick="mv('curriculum',${i},1)">↓</button>
+      <button class="btn grey sm" onclick="formCurr(${i})">✏️</button>
+      <button class="btn red sm" onclick="delCurr(${i})">✕</button></div>`).join('')}
     <button class="btn sm" style="margin-top:8px" onclick="formCurr()">＋ 加課程</button></div>
   <div class="card"><h3>✅ 動作檢查清單管理</h3>
     <p class="muted">每個教學項目嘅檢查動作（睇鏡、打燈、睇盲點等）。上堂記錄時逐項剔，自動計總分。</p>
@@ -480,7 +575,7 @@ function vSettings(){
     儲存用量：約 ${usage} MB（上限約5MB，相片會佔最多空間）</p></div>
   <div class="card"><h3>⚠️ 危險區</h3>
     <button class="btn red" onclick="if(confirm('確定清除所有資料？呢個動作冇得返轉頭！建議先匯出備份。')&&confirm('再次確認：全部學生資料將被刪除？')){DB=blank();save();}">清除所有資料</button>
-    <p class="muted" style="margin-bottom:0">版本 v2 · 2026-07-06</p></div>`;
+    <p class="muted" style="margin-bottom:0">版本 v3 · 2026-07-06</p></div>`;
 }
 
 /* --- 名單管理 --- */
@@ -489,18 +584,24 @@ function delTopic(i){ const t=cfg().topics[i]; if(!confirm('刪除「'+t+'」？
 function addCentre(){ const v=(prompt('新考試中心名稱：')||'').trim(); if(!v) return; if(cfg().centres.includes(v)){alert('已存在');return;} cfg().centres.push(v); save(); }
 function delCentre(i){ if(!confirm('刪除「'+cfg().centres[i]+'」？')) return; cfg().centres.splice(i,1); save(); }
 function delCurr(i){ if(!confirm('刪除「'+cfg().curriculum[i].t+'」？')) return; cfg().curriculum.splice(i,1); save(); }
-function formCurr(){
-  openModal(`<h3>新增課程</h3>
-  <label>課程名稱（例：第15堂：市中心駕駛）</label><input id="f_ct">
-  <label>包含教學項目</label>
-  <div class="checkrow">${cfg().topics.map(t=>`<label><input type="checkbox" class="f_ck" value="${esc(t)}">${esc(t)}</label>`).join('')}</div>
-  <div class="row" style="margin-top:14px"><button class="btn" onclick="saveCurr()">儲存</button>
+function formCurr(i){
+  const c=(i!==undefined)?cfg().curriculum[i]:{t:'',track:'G2',k:[]};
+  openModal(`<h3>${i!==undefined?'編輯課程':'新增課程'}</h3>
+  <label>課程類別</label><select id="f_ctrack">
+    <option value="G2" ${c.track!=='G'?'selected':''}>G2課程</option>
+    <option value="G" ${c.track==='G'?'selected':''}>Full G課程</option></select>
+  <label>堂名（例：G2 第1堂 - 基本控制）</label><input id="f_ct" value="${esc(c.t)}">
+  <label>包含教學項目（排堂時自動剔好）</label>
+  <div class="checkrow">${cfg().topics.map(t=>`<label><input type="checkbox" class="f_ck" value="${esc(t)}" ${(c.k||[]).includes(t)?'checked':''}>${esc(t)}</label>`).join('')}</div>
+  <div class="row" style="margin-top:14px"><button class="btn" onclick="saveCurr(${i!==undefined?i:''})">儲存</button>
   <button class="btn grey" onclick="closeModal()">取消</button></div>`);
 }
-function saveCurr(){
-  const t=val('f_ct'); if(!t){alert('請輸入課程名稱');return;}
+function saveCurr(i){
+  const t=val('f_ct'); if(!t){alert('請輸入堂名');return;}
   const k=[...document.querySelectorAll('.f_ck:checked')].map(x=>x.value);
-  cfg().curriculum.push({t,k}); closeModal(); save();
+  const d={t, track:val('f_ctrack'), k};
+  if(i!==undefined&&i!==''){ cfg().curriculum[i]=d; } else { cfg().curriculum.push(d); }
+  closeModal(); save();
 }
 function addCheckItem(k){ const v=(prompt('「'+k+'」新增檢查動作：')||'').trim(); if(!v) return; cfg().checks[k].push(v); save(); }
 function delCheckItem(k,i){ cfg().checks[k].splice(i,1); if(!cfg().checks[k].length) delete cfg().checks[k]; save(); }
@@ -627,6 +728,7 @@ function formLesson(id, presetStu){
   const l=id?DB.lessons.find(x=>x.id===id):{};
   const sid=l.studentId||presetStu||DB.students[0].id;
   TMP_CHECKS=JSON.parse(JSON.stringify(l.checks||{}));
+  TMP_RATES=JSON.parse(JSON.stringify(l.ratings||{}));
   const currIdx=cfg().curriculum.findIndex(c=>c.t===l.title);
   const st0=stu(sid)||{};
   const ltype=l.ltype||(st0.stage==='G'?'G堂':'G2堂');
@@ -636,9 +738,11 @@ function formLesson(id, presetStu){
   <label>學生</label><select id="f_sid">${DB.students.map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
   <label>💵 堂類型（自動計價，金額可再改）</label>
   <select id="f_ltype" onchange="typeChanged()">${['G2堂','G堂','G2考試日','G考試日','自訂'].map(x=>`<option ${ltype===x?'selected':''}>${x}</option>`).join('')}</select>
-  <label>📚 標準課程選單（揀咗自動剔好教學內容）</label>
+  <label>📚 課程選單（G2 / Full G / 重點訓練）</label>
   <select id="f_curr" onchange="applyCurr(this.value)"><option value="">— 自選內容 —</option>
-    ${cfg().curriculum.map((c,i)=>`<option value="${i}" ${i===currIdx?'selected':''}>${esc(c.t)}</option>`).join('')}</select>
+    <optgroup label="G2課程">${cfg().curriculum.map((c,i)=>({c,i})).filter(x=>x.c.track==='G2').map(x=>`<option value="${x.i}" ${x.i===currIdx?'selected':''}>${esc(x.c.t)}</option>`).join('')}</optgroup>
+    <optgroup label="Full G課程">${cfg().curriculum.map((c,i)=>({c,i})).filter(x=>x.c.track==='G').map(x=>`<option value="${x.i}" ${x.i===currIdx?'selected':''}>${esc(x.c.t)}</option>`).join('')}</optgroup>
+    <option value="FOCUS" ${l.title==='重點訓練'?'selected':''}>⭐ 重點訓練（第5堂之後）</option></select>
   <label>日期 *</label><input id="f_date" type="date" value="${l.date||todayStr()}">
   <label>開始時間 *</label><input id="f_start" type="time" value="${l.start||'10:00'}">
   <label>時長（小時）</label><select id="f_dur" onchange="calcFee()">${[1,1.5,2,2.5,3,3.5,4].map(x=>`<option ${defDur==x?'selected':''}>${x}</option>`).join('')}</select>
@@ -648,6 +752,8 @@ function formLesson(id, presetStu){
   <div class="checkrow">${cfg().topics.map(t=>`<label><input type="checkbox" class="f_topic" value="${esc(t)}" ${(l.topics||[]).includes(t)?'checked':''} onchange="renderChecks()">${esc(t)}</label>`).join('')}</div>
   <label>✅ 動作檢查（逐項剔，自動計分）</label>
   <div id="checksbox" onchange="onChk(event)"></div>
+  <label>⭐ 每項目評分（1至5星，撳星星）</label>
+  <div id="ratebox" onclick="onRate(event)"></div>
   <label>本堂整體評分</label><select id="f_score"><option value="">未評</option>${[1,2,3,4,5].map(x=>`<option value="${x}" ${l.score==x?'selected':''}>${'★'.repeat(x)}</option>`).join('')}</select>
   <label>該堂問題（有咩做得唔好）</label><textarea id="f_problems" rows="2">${esc(l.problems||'')}</textarea>
   <label>⭐ 下堂加強練習</label><textarea id="f_next" rows="2">${esc(l.nextFocus||'')}</textarea>
@@ -675,9 +781,9 @@ function calcFee(){
   if(f!=null) document.getElementById('f_fee').value=f;
 }
 function applyCurr(i){
-  if(i===''){ return; }
+  if(i===''||i==='FOCUS'){ renderChecks(); return; }
   const c=cfg().curriculum[Number(i)];
-  document.querySelectorAll('.f_topic').forEach(x=>{ x.checked=c.k.includes(x.value); });
+  document.querySelectorAll('.f_topic').forEach(x=>{ x.checked=(c.k||[]).includes(x.value); });
   renderChecks();
 }
 function renderChecks(){
@@ -691,6 +797,23 @@ function renderChecks(){
         return '<label><input type="checkbox" class="chk" data-t="'+esc(t)+'" data-i="'+esc(it)+'" '+(on?'checked':'')+'>'+esc(it)+'</label>';
       }).join('')+'</div></div>';
   }).join('') : '<div class="muted">揀咗有檢查清單嘅教學項目，動作清單就會喺度出現</div>';
+  // 每項目星星評分
+  const rbox=document.getElementById('ratebox'); if(!rbox) return;
+  rbox.innerHTML = selected.length ? selected.map(t=>{
+    let stars='';
+    for(let n=1;n<=5;n++){
+      const on=(TMP_RATES[t]||0)>=n;
+      stars+='<span class="rstar" data-t="'+esc(t)+'" data-n="'+n+'" style="font-size:24px;cursor:pointer;padding:0 2px;color:'+(on?'var(--amber)':'#d5dbe5')+'">★</span>';
+    }
+    return '<div class="row" style="margin-top:4px;padding:6px 8px;background:#f8fafc;border-radius:8px"><span style="font-size:13px">'+esc(t)+'</span><span class="right">'+stars+'</span></div>';
+  }).join('') : '<div class="muted">剔咗教學內容，評分星星就會喺度出現</div>';
+}
+function onRate(e){
+  const el=e.target;
+  if(!el.classList.contains('rstar')) return;
+  const t=el.dataset.t, n=Number(el.dataset.n);
+  TMP_RATES[t]=(TMP_RATES[t]===n)?0:n;
+  renderChecks();
 }
 function onChk(e){
   const el=e.target;
@@ -716,9 +839,12 @@ function saveLesson(id){
   const checks={};
   topics.forEach(t=>{ if(TMP_CHECKS[t]&&Object.keys(TMP_CHECKS[t]).length) checks[t]=TMP_CHECKS[t]; });
   const ci=val('f_curr');
+  const ratings={};
+  topics.forEach(t=>{ if(TMP_RATES[t]) ratings[t]=TMP_RATES[t]; });
   const d={studentId:val('f_sid'), date, start, dur:Number(val('f_dur')), fee:Number(val('f_fee')||0),
     ltype:val('f_ltype'), loc:val('f_loc'), topics, checks:Object.keys(checks).length?checks:null,
-    title: ci!==''?cfg().curriculum[Number(ci)].t:'',
+    ratings:Object.keys(ratings).length?ratings:null,
+    title: ci==='FOCUS'?'重點訓練':(ci!==''?cfg().curriculum[Number(ci)].t:''),
     score:val('f_score')?Number(val('f_score')):null, problems:val('f_problems'), nextFocus:val('f_next')};
   if(id){ Object.assign(DB.lessons.find(x=>x.id===id), d); }
   else { d.id=uid(); DB.lessons.push(d); }
