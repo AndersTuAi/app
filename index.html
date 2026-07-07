@@ -110,18 +110,28 @@ function DEF(){ return {
     {t:'Full G 第3堂',track:'G',k:[]},
     {t:'Full G 第4堂',track:'G',k:[]},
     {t:'Full G 第5堂',track:'G',k:[]}],
-  checks:{
-    '三點掉頭':['睇鏡','打燈','睇盲點','選位安全','轉向控制','完成回正'],
-    '平行泊車':['打燈','倒後觀察','入位角度','中途調整','距路邊30cm內'],
-    '倒後入位':['睇鏡','倒後觀察','入位準確','速度控制'],
-    '轉線':['睇鏡','打燈','睇盲點','保持車速','順暢入線'],
-    '轉彎':['睇鏡','打燈','減速','行車線正確','轉後回正'],
-    '路口讓先':['停線前停定','左右觀察','讓行人','起步暢順'],
-    '高速公路':['加速匯入','保持車距','睇鏡','打燈','睇盲點'],
-    '緊急停車':['快速反應','煞車控制','靠邊安全','開危險燈'],
-    '斜路泊車':['方向盤角度正確','手掣使用','起步冇後溜'],
-    '直路控制':['行車線置中','速度穩定','雙手揸軚']
-  }
+  checks:(function(){
+    const simple={
+      '平行泊車':['打燈','倒後觀察','入位角度','中途調整','距路邊30cm內'],
+      '倒後入位':['睇鏡','倒後觀察','入位準確','速度控制'],
+      '轉線':['睇鏡','打燈','睇盲點','保持車速','順暢入線'],
+      '轉彎':['睇鏡','打燈','減速','行車線正確','轉後回正'],
+      '路口讓先':['停線前停定','左右觀察','讓行人','起步暢順'],
+      '高速公路':['加速匯入','保持車距','睇鏡','打燈','睇盲點'],
+      '緊急停車':['快速反應','煞車控制','靠邊安全','開危險燈'],
+      '斜路泊車':['方向盤角度正確','手掣使用','起步冇後溜'],
+      '直路控制':['行車線置中','速度穩定','雙手揸軚']
+    };
+    const out={};
+    for(const k in simple) out[k]=simple[k].map(s=>({s:s,a:[]}));
+    out['三點掉頭']=[
+      {s:'路邊停',a:['睇右鏡','打右燈','睇右盲點','停定車輛']},
+      {s:'第一點掉頭',a:['睇清楚環境','睇左鏡','打左燈','睇左盲點','轉盡左軚','放剎車，慢流左邊方向(慢車快軚)','其間不斷左右看環境，確保路面安全','直到前面路壆出現在左鏡底']},
+      {s:'第二點掉頭',a:['睇清楚環境(左/右/後：3方面)','睇右鏡','打右燈','睇右盲點，確認安全','轉盡右軚','放剎車，慢流右邊方向(慢車快軚)','其間不斷左右後看環境，確保路面安全','直退到路面1/3位置後停止']},
+      {s:'第三點掉頭',a:['睇清楚環境(左/右：2方面)','打左燈','睇右位置，確認安全','轉盡左軚(慢車快軚)','放剎車，比少少油，轉左邊方向','鬆軚，加油，收正行車度']}
+    ];
+    return out;
+  })()
 };}
 
 /* ================= 資料 ================= */
@@ -142,17 +152,27 @@ function load(){
   d.config = d.config || {};
   for(const k in def){ if(d.config[k]===undefined) d.config[k]=def[k]; }
   // v3遷移：舊14堂課程表（冇track欄位）自動換做G2/Full G雙軌
+  const oldcv=d.config.cv||0;
   const cur=d.config.curriculum||[];
   if(cur.length && !cur.some(c=>c.track)){ d.config.curriculum=def.curriculum; }
-  d.config.cv=4;
   // v4遷移：牌照階段分「現有」同「目標」
   (d.students||[]).forEach(s=>{
     if(s.stage==='G'){ s.stage='G2'; s.target='Full G'; }
     if(!s.target) s.target=(s.stage==='G1')?'G2':'Full G';
   });
+  // v5遷移：檢查清單改兩層制（步驟→細動作），舊項目每項變一個步驟
+  d.expenses = d.expenses || [];
+  const cks=d.config.checks||{};
+  for(const k in cks){
+    if(Array.isArray(cks[k]) && cks[k].length && typeof cks[k][0]==='string'){
+      cks[k]=cks[k].map(s=>({s:s,a:[]}));
+    }
+  }
+  if(oldcv<5){ d.config.checks['三點掉頭']=def.checks['三點掉頭']; }
+  d.config.cv=5;
   return d;
 }
-function blank(){ return {students:[], lessons:[], payments:[], exams:[], config:DEF()}; }
+function blank(){ return {students:[], lessons:[], payments:[], exams:[], expenses:[], config:DEF()}; }
 function cfg(){ return DB.config; }
 function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
@@ -289,6 +309,31 @@ function vDash(){
 
   const owedList=DB.students.map(s=>({s,o:owedOf(s.id)})).filter(x=>x.o>0).sort((a,b)=>b.o-a.o);
 
+  // 收支平衡
+  const expAll=expenseByMonth();
+  const expM=expAll[thisM]||0;
+  const incM=inc[thisM]||0;
+  const profitM=incM-expM;
+  const totalIncome=DB.payments.reduce((a,p)=>a+Number(p.amount),0);
+  const pastCount=DB.lessons.filter(isPast).length;
+  const avgLesson=pastCount?totalIncome/pastCount:0;
+  const paidStu=new Set(DB.payments.map(p=>p.studentId)).size;
+  const avgStu=paidStu?totalIncome/paidStu:0;
+  let beText='';
+  if(profitM>=0){ beText='✅ 本月已收支平衡，盈利 '+money(profitM); }
+  else{
+    const needL=avgLesson>0?Math.ceil(-profitM/avgLesson):null;
+    const needS=avgStu>0?Math.ceil(-profitM/avgStu):null;
+    beText='本月仲差 '+money(-profitM)+' 先打和：'
+      +(needL!=null?'約需多 <b>'+needL+'堂</b>（平均每堂收 '+money(avgLesson)+'）':'')
+      +(needS!=null?'　或者 <b>'+needS+'個學生</b>（平均每學生 '+money(avgStu)+'）':'')
+      +(needL==null&&needS==null?'（未有收入記錄，計唔到平均）':'');
+  }
+  const beCard=`<div class="card" style="margin-top:12px"><h3>📈 本月收支平衡</h3>
+    <div class="row"><span class="muted">收入 ${money(incM)}　−　支出 ${money(expM)}</span>
+    <span class="right" style="font-weight:800;font-size:18px;color:${profitM>=0?'var(--green)':'var(--red)'}">${money(profitM)}</span></div>
+    <p class="muted" style="margin-bottom:0;margin-top:6px">${beText}</p></div>`;
+
   return `
   <div class="grid2">
     <div class="stat"><div class="l">本月收入</div><div class="v" style="color:var(--green)">${money(inc[thisM]||0)}</div></div>
@@ -296,6 +341,7 @@ function vDash(){
     <div class="stat"><div class="l">進行中學生</div><div class="v">${active}</div></div>
     <div class="stat"><div class="l">路試合格率</div><div class="v">${rate}</div></div>
   </div>
+  ${beCard}
   ${todayCard}
   ${exCard}
   <div class="card" style="margin-top:12px"><h3>近12個月收入 (CAD)</h3><div class="chart chartwrap">${bars}</div></div>
@@ -545,33 +591,66 @@ function vSchedule(){
 }
 
 /* ================= 帳目頁 ================= */
+function expenseByMonth(){
+  const map={};
+  (DB.expenses||[]).forEach(e=>{ const k=monthKey(e.date); map[k]=(map[k]||0)+Number(e.amount); });
+  return map;
+}
 function vMoney(){
   const inc=incomeByMonth();
-  const keys=Object.keys(inc).sort().reverse().slice(0,12);
+  const exp=expenseByMonth();
+  const now=new Date(); const thisM=now.getFullYear()+'-'+pad(now.getMonth()+1);
+  const keys=[...new Set([...Object.keys(inc),...Object.keys(exp)])].sort().reverse().slice(0,12);
   const owedList=DB.students.map(s=>({s,o:owedOf(s.id)})).filter(x=>x.o>0).sort((a,b)=>b.o-a.o);
   const pays=[...DB.payments].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
+  const exps=[...(DB.expenses||[])].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30);
   const total=DB.payments.reduce((a,p)=>a+Number(p.amount),0);
+  const totalExp=(DB.expenses||[]).reduce((a,e)=>a+Number(e.amount),0);
+  const incM=inc[thisM]||0, expM=exp[thisM]||0, profitM=incM-expM;
   return `
   <div class="grid2">
-    <div class="stat"><div class="l">總收入（全部）</div><div class="v" style="color:var(--green)">${money(total)}</div></div>
+    <div class="stat"><div class="l">本月收入</div><div class="v" style="color:var(--green)">${money(incM)}</div></div>
+    <div class="stat"><div class="l">本月支出</div><div class="v" style="color:var(--red)">${money(expM)}</div></div>
+    <div class="stat"><div class="l">本月盈利</div><div class="v" style="color:${profitM>=0?'var(--green)':'var(--red)'}">${money(profitM)}</div></div>
     <div class="stat"><div class="l">未收學費</div><div class="v" style="color:var(--red)">${money(owedList.reduce((a,x)=>a+x.o,0))}</div></div>
   </div>
-  ${owedList.length?`<div class="card" style="margin-top:12px"><h3>⚠️ 欠學費名單</h3>${owedList.map(x=>`
+  <div class="card" style="margin-top:12px"><div class="row"><h3 style="margin:0">💸 支出記錄</h3>
+    <button class="btn red sm right" onclick="formExpense()">＋ 加支出</button></div>
+    ${exps.length?exps.map(e=>`<div class="item row"><b>${money(e.amount)}</b><span>${esc(e.name)}</span>
+      <span class="muted right">${e.date}</span>
+      <button class="btn red sm" onclick="delExpense('${e.id}')">✕</button></div>`).join(''):'<div class="muted" style="margin-top:8px">未有支出記錄（例：入油、換油、保險、洗車）</div>'}</div>
+  ${owedList.length?`<div class="card"><h3>⚠️ 欠學費名單</h3>${owedList.map(x=>`
     <div class="item row"><b>${esc(x.s.name)}</b><span class="muted">📞 ${esc(x.s.phone||'')}</span>
     <span style="color:var(--red);font-weight:700">${money(x.o)}</span>
     ${x.s.phone?`<button class="btn green sm" onclick="wa('${esc(x.s.phone)}')">💬</button>`:''}
     <button class="btn green sm right" onclick="formPayment('${x.s.id}')">收款</button></div>`).join('')}</div>`:''}
-  <div class="card" style="margin-top:12px"><h3>每月收入</h3><table><tr><th>月份</th><th>收入 (CAD)</th></tr>
-    ${keys.map(k=>`<tr><td>${k}</td><td>${money(inc[k])}</td></tr>`).join('')||'<tr><td colspan=2 class=muted>未有記錄</td></tr>'}</table></div>
+  <div class="card"><h3>每月收支盈利</h3><table><tr><th>月份</th><th>收入</th><th>支出</th><th>盈利</th></tr>
+    ${keys.map(k=>{const p=(inc[k]||0)-(exp[k]||0);
+      return `<tr><td>${k}</td><td>${money(inc[k]||0)}</td><td>${money(exp[k]||0)}</td><td style="color:${p>=0?'var(--green)':'var(--red)'};font-weight:700">${money(p)}</td></tr>`;}).join('')||'<tr><td colspan=4 class=muted>未有記錄</td></tr>'}
+    <tr style="font-weight:800;background:#f8fafc"><td>總計</td><td>${money(total)}</td><td>${money(totalExp)}</td><td style="color:${total-totalExp>=0?'var(--green)':'var(--red)'}">${money(total-totalExp)}</td></tr></table></div>
   <div class="card"><h3>最近收款（30筆）</h3>
     ${pays.length?pays.map(p=>`<div class="item row"><b>${money(p.amount)}</b><span>${esc(stuName(p.studentId))}</span>
       <span class="muted right">${p.date} ${esc(p.method||'')}</span></div>`).join(''):'<div class="muted">未有記錄</div>'}</div>`;
 }
+function formExpense(){
+  openModal(`<h3>💸 新增支出</h3>
+  <label>日期</label><input id="f_date" type="date" value="${todayStr()}">
+  <label>項目名稱（例：入油、換油、保險）</label><input id="f_ename">
+  <label>金額 (CAD)</label><input id="f_eamt" type="number" inputmode="decimal" step="0.01">
+  <div class="row" style="margin-top:14px"><button class="btn red" onclick="saveExpense()">儲存</button>
+  <button class="btn grey" onclick="closeModal()">取消</button></div>`);
+}
+function saveExpense(){
+  const name=val('f_ename'), amount=Number(val('f_eamt'));
+  if(!name||!amount){alert('請填項目名稱同金額');return;}
+  DB.expenses.push({id:uid(), date:val('f_date')||todayStr(), name:name, amount:amount});
+  closeModal(); save();
+}
+function delExpense(id){ if(confirm('刪除呢筆支出？')){ DB.expenses=DB.expenses.filter(e=>e.id!==id); save(); } }
 
 /* ================= 設定頁 ================= */
 function vSettings(){
   const usage=(JSON.stringify(DB).length/1048576).toFixed(2);
-  const checkKeys=Object.keys(cfg().checks);
   return `
   <div class="card"><h3>💾 備份與過機</h3>
     <p class="muted">資料存喺你部機入面。強烈建議每星期匯出一次備份，儲存喺iCloud Drive，換機或iPhone/iPad互傳資料就用「匯入」。</p>
@@ -595,6 +674,7 @@ function vSettings(){
       <span class="right"></span>
       <button class="btn grey sm" onclick="mv('topics',${i},-1)">↑</button>
       <button class="btn grey sm" onclick="mv('topics',${i},1)">↓</button>
+      <button class="btn grey sm" onclick="renameTopic(${i})">✏️</button>
       <button class="btn red sm" onclick="delTopic(${i})">✕</button></div>`).join('')}
     <button class="btn sm" style="margin-top:8px" onclick="addTopic()">＋ 加教學項目</button></div>
   <div class="card"><h3>🏁 考試中心管理（↑↓排次序）</h3>
@@ -616,19 +696,30 @@ function vSettings(){
       <button class="btn grey sm" onclick="formCurr(${i})">✏️</button>
       <button class="btn red sm" onclick="delCurr(${i})">✕</button></div>`).join('')}
     <button class="btn sm" style="margin-top:8px" onclick="formCurr()">＋ 加課程</button></div>
-  <div class="card"><h3>✅ 動作檢查清單管理</h3>
-    <p class="muted">每個教學項目嘅檢查動作（睇鏡、打燈、睇盲點等）。上堂記錄時逐項剔，自動計總分。</p>
-    ${checkKeys.map(k=>`<div style="margin-top:10px"><b style="font-size:13px">${esc(k)}</b>
-      <span class="x" style="color:var(--red);cursor:pointer;font-weight:700" onclick="delCheckTopic('${esc(k)}')">✕成組刪除</span>
-      <div style="margin-top:4px">${cfg().checks[k].map((it,i)=>`<span class="tag g">${esc(it)}<span class="x" onclick="delCheckItem('${esc(k)}',${i})">✕</span></span>`).join('')}
-      <span class="tag" style="cursor:pointer" onclick="addCheckItem('${esc(k)}')">＋加動作</span></div></div>`).join('')}
-    <button class="btn sm" style="margin-top:10px" onclick="addCheckTopic()">＋ 為其他教學項目加檢查清單</button></div>
+  <div class="card"><h3>✅ 動作檢查清單管理（步驟 → 細動作）</h3>
+    <p class="muted">每個教學項目下面加「步驟」（例：1.路邊停），每個步驟入面有「細動作」（例：a.睇右鏡 b.打右燈）。上堂記錄逐個步驟剔，細動作可展開參考。📋＝複製呢個步驟去其他項目。</p>
+    ${cfg().topics.map(t=>{
+      const steps=cfg().checks[t]||[];
+      return `<div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:10px">
+      <div class="row"><b>${esc(t)}</b><button class="btn sm right" onclick="formStep('${esc(t)}')">＋ 加步驟</button></div>
+      ${steps.length?steps.map((sp,i)=>`<div class="item">
+        <div class="row"><b style="font-size:13px">${i+1}. ${esc(sp.s)}</b><span class="muted">${(sp.a||[]).length}個細動作</span>
+        <span class="right"></span>
+        <button class="btn grey sm" onclick="mvStep('${esc(t)}',${i},-1)">↑</button>
+        <button class="btn grey sm" onclick="mvStep('${esc(t)}',${i},1)">↓</button>
+        <button class="btn grey sm" onclick="formStep('${esc(t)}',${i})">✏️</button>
+        <button class="btn amber sm" onclick="copyStep('${esc(t)}',${i})">📋</button>
+        <button class="btn red sm" onclick="delStep('${esc(t)}',${i})">✕</button></div>
+        ${(sp.a||[]).length?`<div class="muted" style="margin-top:2px;font-size:12px">${sp.a.map((a,j)=>String.fromCharCode(97+j)+'. '+esc(a)).join('　')}</div>`:''}
+      </div>`).join(''):'<div class="muted" style="margin-top:6px">未有步驟，撳「＋加步驟」開始</div>'}
+      </div>`;
+    }).join('')}</div>
   <div class="card"><h3>📊 目前資料量</h3>
     <p class="muted">學生 ${DB.students.length} 人 · 堂數 ${DB.lessons.length} · 收款 ${DB.payments.length} · 考試 ${DB.exams.length}<br>
     儲存用量：約 ${usage} MB（上限約5MB，相片會佔最多空間）</p></div>
   <div class="card"><h3>⚠️ 危險區</h3>
     <button class="btn red" onclick="if(confirm('確定清除所有資料？呢個動作冇得返轉頭！建議先匯出備份。')&&confirm('再次確認：全部學生資料將被刪除？')){DB=blank();save();}">清除所有資料</button>
-    <p class="muted" style="margin-bottom:0">版本 v4 · 2026-07-06</p></div>`;
+    <p class="muted" style="margin-bottom:0">版本 v5 · 2026-07-06</p></div>`;
 }
 
 /* --- 名單管理 --- */
@@ -656,19 +747,64 @@ function saveCurr(i){
   if(i!==undefined&&i!==''){ cfg().curriculum[i]=d; } else { cfg().curriculum.push(d); }
   closeModal(); save();
 }
-function addCheckItem(k){ const v=(prompt('「'+k+'」新增檢查動作：')||'').trim(); if(!v) return; cfg().checks[k].push(v); save(); }
-function delCheckItem(k,i){ cfg().checks[k].splice(i,1); if(!cfg().checks[k].length) delete cfg().checks[k]; save(); }
-function delCheckTopic(k){ if(!confirm('刪除「'+k+'」成組檢查清單？')) return; delete cfg().checks[k]; save(); }
-function addCheckTopic(){
-  const avail=cfg().topics.filter(t=>!cfg().checks[t]);
-  if(!avail.length){alert('所有教學項目都已有檢查清單');return;}
-  const v=(prompt('輸入教學項目名稱（可揀：'+avail.join('、')+'）')||'').trim();
-  if(!v) return;
-  if(cfg().checks[v]){alert('已有清單');return;}
-  cfg().checks[v]=[];
-  const first=(prompt('第一個檢查動作（例：睇鏡）：')||'').trim();
-  if(first) cfg().checks[v].push(first);
+function renameTopic(i){
+  const oldN=cfg().topics[i];
+  const v=(prompt('將「'+oldN+'」改名做：',oldN)||'').trim();
+  if(!v||v===oldN) return;
+  if(cfg().topics.includes(v)){alert('已有同名項目');return;}
+  cfg().topics[i]=v;
+  if(cfg().checks[oldN]){ cfg().checks[v]=cfg().checks[oldN]; delete cfg().checks[oldN]; }
+  cfg().curriculum.forEach(c=>{ c.k=(c.k||[]).map(x=>x===oldN?v:x); });
+  DB.lessons.forEach(l=>{
+    if(l.topics) l.topics=l.topics.map(x=>x===oldN?v:x);
+    if(l.checks&&l.checks[oldN]){ l.checks[v]=l.checks[oldN]; delete l.checks[oldN]; }
+    if(l.ratings&&l.ratings[oldN]!=null){ l.ratings[v]=l.ratings[oldN]; delete l.ratings[oldN]; }
+  });
   save();
+  alert('已改名，歷史堂記錄都已同步更新');
+}
+function formStep(t,i){
+  const sp=(i!==undefined)?cfg().checks[t][i]:{s:'',a:[]};
+  openModal(`<h3>${i!==undefined?'編輯':'新增'}步驟（${esc(t)}）</h3>
+  <label>步驟名（例：路邊停）</label><input id="f_ss" value="${esc(sp.s)}">
+  <label>細動作（一行一個，次序即係a、b、c...，直接上下搬行就係排序）</label>
+  <textarea id="f_sa" rows="8" placeholder="睇右鏡&#10;打右燈&#10;睇右盲點&#10;停定車輛">${esc((sp.a||[]).join('\n'))}</textarea>
+  <div class="row" style="margin-top:14px"><button class="btn" onclick="saveStep('${esc(t)}',${i!==undefined?i:''})">儲存</button>
+  <button class="btn grey" onclick="closeModal()">取消</button></div>`);
+}
+function saveStep(t,i){
+  const s=val('f_ss'); if(!s){alert('請輸入步驟名');return;}
+  const a=document.getElementById('f_sa').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  if(!cfg().checks[t]) cfg().checks[t]=[];
+  const d={s:s,a:a};
+  if(i!==''&&i!==undefined){ cfg().checks[t][i]=d; } else { cfg().checks[t].push(d); }
+  closeModal(); save();
+}
+function mvStep(t,i,dd){
+  const a=cfg().checks[t]; const j=i+dd;
+  if(j<0||j>=a.length) return;
+  const tmp=a[i]; a[i]=a[j]; a[j]=tmp; save();
+}
+function delStep(t,i){
+  if(!confirm('刪除步驟「'+cfg().checks[t][i].s+'」？')) return;
+  cfg().checks[t].splice(i,1);
+  if(!cfg().checks[t].length) delete cfg().checks[t];
+  save();
+}
+function copyStep(t,i){
+  openModal(`<h3>📋 複製步驟「${esc(cfg().checks[t][i].s)}」</h3>
+  <label>複製去邊個教學項目？</label>
+  <select id="f_cpt">${cfg().topics.map(x=>`<option value="${esc(x)}">${esc(x)}${x===t?'（原項目）':''}</option>`).join('')}</select>
+  <div class="row" style="margin-top:14px"><button class="btn" onclick="doCopyStep('${esc(t)}',${i})">複製</button>
+  <button class="btn grey" onclick="closeModal()">取消</button></div>`);
+}
+function doCopyStep(t,i){
+  const tgt=val('f_cpt');
+  const sp=JSON.parse(JSON.stringify(cfg().checks[t][i]));
+  if(!cfg().checks[tgt]) cfg().checks[tgt]=[];
+  cfg().checks[tgt].push(sp);
+  closeModal(); save();
+  alert('已複製到「'+tgt+'」');
 }
 
 function exportData(){
@@ -875,12 +1011,14 @@ function renderChecks(){
   const selected=[...document.querySelectorAll('.f_topic:checked')].map(x=>x.value);
   const withChecks=selected.filter(t=>cfg().checks[t]&&cfg().checks[t].length);
   box.innerHTML = withChecks.length ? withChecks.map(t=>{
-    return '<div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px"><b style="font-size:13px">'+esc(t)+'</b><div class="checkrow">'
-      +cfg().checks[t].map(it=>{
-        const on=TMP_CHECKS[t]&&TMP_CHECKS[t][it];
-        return '<label><input type="checkbox" class="chk" data-t="'+esc(t)+'" data-i="'+esc(it)+'" '+(on?'checked':'')+'>'+esc(it)+'</label>';
-      }).join('')+'</div></div>';
-  }).join('') : '<div class="muted">揀咗有檢查清單嘅教學項目，動作清單就會喺度出現</div>';
+    return '<div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px"><b style="font-size:13px">'+esc(t)+'</b>'
+      +cfg().checks[t].map((sp,i)=>{
+        const on=TMP_CHECKS[t]&&TMP_CHECKS[t][sp.s];
+        return '<div style="margin-top:6px"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="chk" data-t="'+esc(t)+'" data-i="'+esc(sp.s)+'" '+(on?'checked':'')+'><b style="font-size:13px">'+(i+1)+'. '+esc(sp.s)+'</b></label>'
+          +((sp.a||[]).length?'<details style="margin-left:26px"><summary class="muted" style="font-size:12px;cursor:pointer">細動作（'+sp.a.length+'）</summary><div class="muted" style="font-size:12px;line-height:1.7">'+sp.a.map((a,j)=>String.fromCharCode(97+j)+'. '+esc(a)).join('<br>')+'</div></details>':'')
+          +'</div>';
+      }).join('')+'</div>';
+  }).join('') : '<div class="muted">揀咗有檢查清單嘅教學項目，步驟清單就會喺度出現</div>';
   // 每項目星星評分
   const rbox=document.getElementById('ratebox'); if(!rbox) return;
   rbox.innerHTML = selected.length ? selected.map(t=>{
