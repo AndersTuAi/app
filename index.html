@@ -65,6 +65,10 @@ table{width:100%; border-collapse:collapse; font-size:13px;}
 th,td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--line);}
 th{color:var(--sub); font-weight:600; font-size:12px;}
 .score{color:var(--amber); letter-spacing:1px;}
+.acitem{padding:9px 10px; background:#16291e; border:1px solid var(--line); border-top:none; font-size:13px; cursor:pointer; color:var(--ink);}
+.acitem:first-child{border-top:1px solid var(--line); border-radius:0;}
+.acitem:last-child{border-radius:0 0 10px 10px;}
+.acitem:active{background:#24402f;}
 .thumb{width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--line); cursor:pointer;}
 .pct{font-weight:800;}
 @media(min-width:700px){ .grid2{grid-template-columns:repeat(4,1fr);} }
@@ -751,7 +755,7 @@ function vSettings(){
     儲存用量：約 ${usage} MB（上限約5MB，相片會佔最多空間）</p></div>
   <div class="card"><h3>⚠️ 危險區</h3>
     <button class="btn red" onclick="if(confirm('確定清除所有資料？呢個動作冇得返轉頭！建議先匯出備份。')&&confirm('再次確認：全部學生資料將被刪除？')){DB=blank();save();}">清除所有資料</button>
-    <p class="muted" style="margin-bottom:0">版本 v7（賽車儀表）· 2026-07-07</p></div>`;
+    <p class="muted" style="margin-bottom:0">版本 v8（賽車儀表）· 2026-07-07</p></div>`;
 }
 
 /* --- 名單管理 --- */
@@ -875,6 +879,30 @@ function gcal(lid){
 }
 
 /* ================= 表單 ================= */
+/* --- 地址自動聯想（OpenStreetMap Photon，免費） --- */
+let ACT=null;
+function acInput(el){
+  clearTimeout(ACT);
+  const box=document.getElementById('ac_'+el.id); if(!box) return;
+  const q=el.value.trim();
+  if(q.length<3){ box.innerHTML=''; return; }
+  ACT=setTimeout(function(){
+    fetch('https://photon.komoot.io/api/?q='+encodeURIComponent(q)+'&lat=43.7&lon=-79.42&limit=5&lang=en')
+      .then(r=>r.json())
+      .then(j=>{
+        box.innerHTML=(j.features||[]).map(f=>{
+          const p=f.properties||{};
+          const line1=p.housenumber?((p.housenumber||'')+' '+(p.street||'')):(p.name||p.street||'');
+          const addr=[line1,(p.district&&p.district!==p.city)?p.district:'',p.city,p.state,p.postcode].filter(Boolean).join(', ');
+          return '<div class="acitem" onclick="pickAc(\''+el.id+'\',this.textContent)">'+esc(addr)+'</div>';
+        }).join('');
+      }).catch(()=>{ box.innerHTML=''; });
+  },350);
+}
+function pickAc(id,v){
+  const el=document.getElementById(id); if(el) el.value=v.trim();
+  const box=document.getElementById('ac_'+id); if(box) box.innerHTML='';
+}
 function openModal(html){ document.getElementById('modal').innerHTML=html; document.getElementById('modal').style.display='block'; document.getElementById('modalbg').style.display='block'; }
 function closeModal(){ document.getElementById('modal').style.display='none'; document.getElementById('modalbg').style.display='none'; }
 function val(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
@@ -890,7 +918,7 @@ function formStudent(id){
     <option value="HK" ${s.region==='HK'?'selected':''}>🇭🇰 香港 +852</option></select>
   <label>電話（儲存時自動加國碼同格式化）</label><input id="f_phone" inputmode="tel" value="${esc(s.phone||'')}" placeholder="${s.region==='HK'?'例：9123 4567（8位數字）':'例：416 555 1234（10位數字）'}">
   <label>Email</label><input id="f_email" inputmode="email" value="${esc(s.email||'')}">
-  <label>接送地址</label><input id="f_addr" value="${esc(s.address||'')}">
+  <label>接送地址（打3個字自動聯想，跳出嚟就撳）</label><input id="f_addr" value="${esc(s.address||'')}" oninput="acInput(this)" autocomplete="off"><div id="ac_f_addr"></div>
   <label>💵 該學生時薪 (CAD/小時，留空就用全局預設)</label><input id="f_rate" type="number" inputmode="decimal" value="${s.rate!=null?s.rate:''}" placeholder="預設 $${cfg().rates.g2}（G2）/ $${cfg().rates.g}（G）">
   <label>現有牌照</label><select id="f_stage">${['G1','G2'].map(x=>`<option ${(s.stage||'G1')===x?'selected':''}>${x}</option>`).join('')}</select>
   <label>目標牌照</label><select id="f_target">${['G2','Full G'].map(x=>`<option ${(s.target||'G2')===x?'selected':''}>${x}</option>`).join('')}</select>
@@ -899,8 +927,8 @@ function formStudent(id){
   <label>備註</label><textarea id="f_notes" rows="2">${esc(s.notes||'')}</textarea>
   <label>📷 相片（駕駛執照等，自動壓縮）</label>
   <div id="photolist" class="row"></div>
-  <label class="btn grey sm" style="display:inline-block;width:auto;margin-top:6px">＋ 影相/揀相
-    <input type="file" accept="image/*" style="display:none" onchange="addPhoto(this)"></label>
+  <label class="btn grey sm" style="display:inline-block;width:auto;margin-top:6px">＋ 影相/揀相（可一次揀多張）
+    <input type="file" accept="image/*" multiple style="display:none" onchange="addPhoto(this)"></label>
   <div class="row" style="margin-top:14px"><button class="btn" onclick="saveStudent('${id||''}')">儲存</button>
   <button class="btn grey" onclick="closeModal()">取消</button></div>`);
   renderPhotoList();
@@ -912,23 +940,25 @@ function renderPhotoList(){
     <span onclick="TMP_PHOTOS.splice(${i},1);renderPhotoList()" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;font-size:12px;cursor:pointer">✕</span></span>`).join('')||'<span class="muted">未有相片</span>';
 }
 function addPhoto(input){
-  const f=input.files[0]; if(!f) return;
-  const r=new FileReader();
-  r.onload=()=>{
-    const img=new Image();
-    img.onload=()=>{
-      const c=document.createElement('canvas');
-      let w=img.width,h=img.height; const max=1000;
-      if(w>max){ h=h*max/w; w=max; }
-      if(h>max){ w=w*max/h; h=max; }
-      c.width=w; c.height=h;
-      c.getContext('2d').drawImage(img,0,0,w,h);
-      TMP_PHOTOS.push({id:uid(),data:c.toDataURL('image/jpeg',0.72)});
-      renderPhotoList();
+  const files=[...input.files]; if(!files.length) return;
+  files.forEach(f=>{
+    const r=new FileReader();
+    r.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        const c=document.createElement('canvas');
+        let w=img.width,h=img.height; const max=1000;
+        if(w>max){ h=h*max/w; w=max; }
+        if(h>max){ w=w*max/h; h=max; }
+        c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        TMP_PHOTOS.push({id:uid(),data:c.toDataURL('image/jpeg',0.72)});
+        renderPhotoList();
+      };
+      img.src=r.result;
     };
-    img.src=r.result;
-  };
-  r.readAsDataURL(f);
+    r.readAsDataURL(f);
+  });
   input.value='';
 }
 function saveStudent(id){
@@ -982,7 +1012,7 @@ function formLesson(id, presetStu){
   <label>本堂收費 (CAD)</label><input id="f_fee" type="number" inputmode="decimal" value="${defFee}">
   <label>💰 堂費狀態</label><select id="f_pay">
     ${['未付','已付-現金','已付-E-Transfer'].map(x=>`<option ${(l.payStatus||'未付')===x?'selected':''}>${x}</option>`).join('')}</select>
-  <label>接送/上堂地點</label><input id="f_loc" value="${esc(l.loc||'')}">
+  <label>接送/上堂地點（打3個字自動聯想）</label><input id="f_loc" value="${esc(l.loc||'')}" oninput="acInput(this)" autocomplete="off"><div id="ac_f_loc"></div>
   <label>教學內容（上完堂先填都得）</label>
   <div class="checkrow">${cfg().topics.map(t=>`<label><input type="checkbox" class="f_topic" value="${esc(t)}" ${(l.topics||[]).includes(t)?'checked':''} onchange="renderChecks()">${esc(t)}</label>`).join('')}</div>
   <label>✅ 動作檢查（逐項剔，自動計分）</label>
@@ -1112,7 +1142,10 @@ function saveLesson(id){
       date:d.date, method:d.payStatus.includes('現金')?'現金':'e-Transfer', note:'堂費（自動記錄）'});
   }
   closeModal(); save();
-  if(!id && new Date(date+'T'+start)>new Date() && confirm('已排堂！要唔要WhatsApp發送排堂確認俾學生？\n（學生確認後，再撳該堂嘅📅掣加入Google日曆）')) waConfirm(lid2);
+  if(!id && new Date(date+'T'+start)>new Date()){
+    gcal(lid2);
+    if(confirm('已排堂，Google日曆加入畫面已經開咗（過去撳「儲存」就入咗日曆）。\n\n要唔要同時WhatsApp發送排堂確認俾學生？')) waConfirm(lid2);
+  }
 }
 function delLesson(id){ if(confirm('確定刪除呢堂？（連結嘅自動收款記錄會一齊刪）')){ DB.lessons=DB.lessons.filter(l=>l.id!==id); DB.payments=DB.payments.filter(p=>p.lessonId!==id); save(); } }
 
