@@ -8,29 +8,32 @@
 <title>教車師父管理系統</title>
 <style>
 :root{
-  --bg:#f4f6f9; --card:#ffffff; --ink:#1a2233; --sub:#6b7486;
-  --blue:#2563eb; --green:#16a34a; --red:#dc2626; --amber:#d97706;
-  --line:#e3e8ef; --rad:14px;
+  --bg:#0f1d15; --card:#1c3226; --ink:#f2ead6; --sub:#8fa896;
+  --blue:#d9b64a; --green:#3a9d6e; --red:#d05a41; --amber:#e07a5f;
+  --line:#2a4433; --rad:14px; --neon:#e6c65f;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 body{margin:0; font-family:-apple-system,"PingFang HK","PingFang TC",sans-serif; background:var(--bg); color:var(--ink); padding-bottom:80px;}
-header{background:var(--blue); color:#fff; padding:calc(env(safe-area-inset-top) + 14px) 16px 14px; position:sticky; top:0; z-index:5;}
-header h1{margin:0; font-size:19px; font-weight:700;}
-header .sub{font-size:12px; opacity:.85; margin-top:2px;}
-nav{position:fixed; bottom:0; left:0; right:0; background:var(--card); border-top:1px solid var(--line); display:flex; z-index:9; padding-bottom:env(safe-area-inset-bottom);}
+header{background:#14251c; color:var(--ink); padding:calc(env(safe-area-inset-top) + 14px) 16px 14px; position:sticky; top:0; z-index:5; border-bottom:2px solid var(--blue); box-shadow:0 4px 18px rgba(0,0,0,.5);}
+header h1{margin:0; font-size:19px; font-weight:700; letter-spacing:1px;}
+header .sub{font-size:12px; color:var(--sub); margin-top:2px;}
+nav{position:fixed; bottom:0; left:0; right:0; background:#14251c; border-top:1px solid var(--line); display:flex; z-index:9; padding-bottom:env(safe-area-inset-bottom); box-shadow:0 -4px 18px rgba(0,0,0,.5);}
 nav button{flex:1; background:none; border:none; padding:10px 0 8px; font-size:12px; color:var(--sub); cursor:pointer;}
 nav button .ic{font-size:20px; display:block; margin-bottom:2px;}
 nav button.on{color:var(--blue); font-weight:700;}
 main{padding:14px; max-width:860px; margin:0 auto;}
-.card{background:var(--card); border-radius:var(--rad); padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(20,30,60,.06);}
-.card h3{margin:0 0 10px; font-size:15px;}
+.card{background:var(--card); border-radius:var(--rad); padding:14px; margin-bottom:12px; border:1px solid var(--line); box-shadow:0 10px 24px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4), inset 0 1px 0 rgba(217,182,74,.12);}
+.card h3{margin:0 0 10px; font-size:15px; color:var(--ink);}
 .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
-.stat{background:var(--card); border-radius:var(--rad); padding:12px; box-shadow:0 1px 3px rgba(20,30,60,.06);}
+.stat{background:var(--card); border-radius:var(--rad); padding:12px; border:1px solid var(--line); box-shadow:0 10px 24px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4), inset 0 1px 0 rgba(217,182,74,.12);}
 .stat .v{font-size:22px; font-weight:800; margin-top:4px;}
 .stat .l{font-size:12px; color:var(--sub);}
-.btn{display:inline-block; border:none; border-radius:10px; padding:10px 14px; font-size:14px; font-weight:600; cursor:pointer; background:var(--blue); color:#fff;}
+.btn{display:inline-block; border:none; border-radius:10px; padding:10px 14px; font-size:14px; font-weight:600; cursor:pointer; background:var(--blue); color:#20301f; box-shadow:0 4px 12px rgba(0,0,0,.45);}
 .btn.sm{padding:6px 10px; font-size:12px; border-radius:8px;}
-.btn.grey{background:#eef1f6; color:var(--ink);}
+.btn.green{color:#fff;}
+.btn.red{color:#fff;}
+.btn.amber{color:#fff;}
+.btn.grey{background:#24402f; color:var(--ink);}
 .btn.green{background:var(--green);}
 .btn.red{background:var(--red);}
 .btn.amber{background:var(--amber);}
@@ -38,13 +41,13 @@ main{padding:14px; max-width:860px; margin:0 auto;}
 .right{margin-left:auto;}
 .item{border-bottom:1px solid var(--line); padding:10px 0;}
 .item:last-child{border-bottom:none;}
-.tag{display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; background:#e8eefc; color:var(--blue); margin:1px 2px 1px 0;}
-.tag.g{background:#e6f6ec; color:var(--green);}
-.tag.r{background:#fdeaea; color:var(--red);}
-.tag.a{background:#fdf3e3; color:var(--amber);}
+.tag{display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; background:rgba(217,182,74,.16); color:var(--neon); margin:1px 2px 1px 0;}
+.tag.g{background:rgba(58,157,110,.2); color:#6fd6a3;}
+.tag.r{background:rgba(208,90,65,.2); color:#ff9a80;}
+.tag.a{background:rgba(224,122,95,.2); color:#ffc09b;}
 .tag .x{cursor:pointer; color:var(--red); font-weight:700; margin-left:4px;}
 .muted{color:var(--sub); font-size:12px;}
-input,select,textarea{width:100%; padding:10px; border:1px solid var(--line); border-radius:10px; font-size:15px; background:#fff; color:var(--ink); font-family:inherit;}
+input,select,textarea{width:100%; padding:10px; border:1px solid var(--line); border-radius:10px; font-size:15px; background:#16291e; color:var(--ink); font-family:inherit;}
 label{font-size:12px; color:var(--sub); display:block; margin:10px 0 4px; font-weight:600;}
 .chart{display:flex; align-items:flex-end; gap:4px; height:120px; margin-top:8px;}
 .chart .bar{flex:1; background:var(--blue); border-radius:4px 4px 0 0; min-height:2px; position:relative;}
@@ -52,10 +55,10 @@ label{font-size:12px; color:var(--sub); display:block; margin:10px 0 4px; font-w
 .chart .bar b{position:absolute; top:-16px; left:0; right:0; text-align:center; font-size:9px; color:var(--ink); font-weight:600;}
 .chartwrap{padding-bottom:22px; padding-top:16px;}
 #modalbg{display:none; position:fixed; inset:0; background:rgba(10,15,30,.45); z-index:20;}
-#modal{display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:92%; max-width:480px; max-height:86vh; overflow:auto; background:var(--card); border-radius:16px; padding:18px; z-index:21;}
+#modal{display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:92%; max-width:480px; max-height:86vh; overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; z-index:21; box-shadow:0 20px 50px rgba(0,0,0,.7);}
 #modal h3{margin:0 0 4px;}
 .checkrow{display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;}
-.checkrow label{display:inline-flex; align-items:center; gap:4px; margin:0; background:#eef1f6; padding:7px 10px; border-radius:8px; font-size:13px; color:var(--ink); cursor:pointer;}
+.checkrow label{display:inline-flex; align-items:center; gap:4px; margin:0; background:#24402f; padding:7px 10px; border-radius:8px; font-size:13px; color:var(--ink); cursor:pointer;}
 .checkrow input{width:auto;}
 .searchbox{margin-bottom:12px;}
 table{width:100%; border-collapse:collapse; font-size:13px;}
@@ -98,6 +101,7 @@ function DEF(){ return {
   topics:['直路控制','轉彎','平行泊車','斜路泊車','倒後入位','三點掉頭','高速公路','轉線','路口讓先','緊急停車','路試路線','夜駕','雨天駕駛'],
   centres:['Port Union','Metro East (Scarborough)','Downsview','Etobicoke','Newmarket','Brampton','Oshawa','其他'],
   cv:4,
+  bookUrl:'',
   waTpl:'你好 {name}！\n📅 排堂確認 Booking Confirmation\n━━━━━━━━━━\n日期 Date：{date}（{weekday}）\n時間 Time：{start} - {end}（{dur}小時/hrs）\n接送地點 Pickup：{loc}\n堂費 Fee：${fee} CAD\n━━━━━━━━━━\n收到請回覆「確認」✅\nPlease reply "OK" to confirm.\n多謝！Thank you!',
   curriculum:[
     {t:'G2 第1堂',track:'G2',k:[]},
@@ -143,6 +147,7 @@ let SEARCH = '';
 let TMP_CHECKS = {};
 let TMP_PHOTOS = [];
 let TMP_RATES = {};
+let DASHSUB = 'feed';
 
 function load(){
   let d;
@@ -334,7 +339,28 @@ function vDash(){
     <span class="right" style="font-weight:800;font-size:18px;color:${profitM>=0?'var(--green)':'var(--red)'}">${money(profitM)}</span></div>
     <p class="muted" style="margin-bottom:0;margin-top:6px">${beText}</p></div>`;
 
-  return `
+  // 動態頁：未來排堂 + 未補填
+  const up=DB.lessons.filter(l=>!isPast(l)).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start)).slice(0,10);
+  const needFill=DB.lessons.filter(l=>isPast(l)&&!l.score&&!l.problems&&!l.nextFocus&&!l.checks).sort((a,b)=>(b.date+b.start).localeCompare(a.date+a.start)).slice(0,5);
+  const upCard=up.length?`<div class="card" style="margin-top:12px"><h3>🔜 未來排堂（最近10堂）</h3>${up.map(l=>`
+    <div class="item row"><b>${l.date} ${l.start}</b><span>${esc(stuName(l.studentId))}</span>
+      ${l.ltype?`<span class="tag">${esc(l.ltype)}</span>`:''}<span class="muted">${l.dur}小時</span>
+      <button class="btn green sm" onclick="waConfirm('${l.id}')">💬</button>
+      <button class="btn sm right" onclick="gcal('${l.id}')">📅</button></div>`).join('')}</div>`:'';
+  const fillCard=needFill.length?`<div class="card" style="margin-top:12px"><h3>📝 上完堂未補填記錄</h3>${needFill.map(l=>`
+    <div class="item row"><b>${esc(stuName(l.studentId))}</b><span class="muted">${l.date} ${l.start}</span>
+    <button class="btn amber sm right" onclick="formLesson('${l.id}')">補填</button></div>`).join('')}</div>`:'';
+
+  const sub=`<div class="row" style="margin-bottom:12px">
+    <button class="btn ${DASHSUB==='feed'?'':'grey'}" style="flex:1" onclick="DASHSUB='feed';render()">📋 動態</button>
+    <button class="btn ${DASHSUB==='charts'?'':'grey'}" style="flex:1" onclick="DASHSUB='charts';render()">📈 圖表</button></div>`;
+
+  if(DASHSUB==='feed'){
+    return sub
+      + (todayCard||'<div class="card"><h3>🗓️ 今日／聽日堂表</h3><div class="muted">今日同聽日未有排堂</div></div>')
+      + fillCard + upCard + exCard;
+  }
+  return sub + `
   <div class="grid2">
     <div class="stat"><div class="l">本月收入</div><div class="v" style="color:var(--green)">${money(inc[thisM]||0)}</div></div>
     <div class="stat"><div class="l">未收學費</div><div class="v" style="color:${owedTotal>0?'var(--red)':'var(--ink)'}">${money(owedTotal)}</div></div>
@@ -342,8 +368,6 @@ function vDash(){
     <div class="stat"><div class="l">路試合格率</div><div class="v">${rate}</div></div>
   </div>
   ${beCard}
-  ${todayCard}
-  ${exCard}
   <div class="card" style="margin-top:12px"><h3>近12個月收入 (CAD)</h3><div class="chart chartwrap">${bars}</div></div>
   <div class="card"><h3>上堂時段分佈（點鐘）</h3><div class="chart chartwrap">${hbars}</div></div>
   <div class="card"><h3>近8星期堂數</h3><div class="chart chartwrap">${wbars}</div></div>
@@ -393,7 +417,7 @@ function vStudentDetail(id){
     <div class="muted" style="margin-top:6px">📞 ${esc(s.phone||'—')} · ✉️ ${esc(s.email||'—')}<br>📍 ${esc(s.address||'—')}${s.address?` <a onclick="gmapS('${id}')" style="color:var(--blue);cursor:pointer;font-weight:700">🗺️ 導航</a>`:''}<br>🏁 考試中心：${esc(s.centre||'未定')}</div>
     ${s.notes?`<div style="margin-top:6px;font-size:13px">📝 ${esc(s.notes)}</div>`:''}
     ${(s.photos||[]).length?`<div class="row" style="margin-top:8px">${s.photos.map(p=>`<img class="thumb" src="${p.data}" onclick="viewPhoto('${id}','${p.id}')">`).join('')}</div>`:''}
-    ${lastFocus?`<div style="margin-top:8px;padding:8px;background:#fdf3e3;border-radius:8px;font-size:13px"><b>⭐ 下堂加強：</b>${esc(lastFocus)}</div>`:''}
+    ${lastFocus?`<div style="margin-top:8px;padding:8px;background:rgba(240,160,32,.15);border-radius:8px;font-size:13px"><b>⭐ 下堂加強：</b>${esc(lastFocus)}</div>`:''}
   </div>
   <div class="grid2">
     <div class="stat"><div class="l">已上堂數</div><div class="v">${past.length}</div></div>
@@ -444,7 +468,7 @@ function vStudentDetail(id){
       return `<tr><td>${k}</td><td>${money(byM[k].due)}</td><td>${money(byM[k].paid)}</td><td style="color:${diff>0?'var(--red)':'var(--green)'};font-weight:700">${money(diff)}</td></tr>`;}).join('');
     return `<div class="card"><h3>📆 每月學費統計</h3>
       <table><tr><th>月份</th><th>應付</th><th>已付</th><th>差額</th></tr>${rows}
-      <tr style="font-weight:800;background:#f8fafc"><td>總計</td><td>${money(td)}</td><td>${money(tp)}</td><td style="color:${td-tp>0?'var(--red)':'var(--green)'}">${money(td-tp)}</td></tr></table></div>`;
+      <tr style="font-weight:800;background:#16291e"><td>總計</td><td>${money(td)}</td><td>${money(tp)}</td><td style="color:${td-tp>0?'var(--red)':'var(--green)'}">${money(td-tp)}</td></tr></table></div>`;
   })()}
   <div class="card"><h3>💰 學費記錄</h3>
   ${pays.length?pays.map(p=>`<div class="item row"><b>${money(p.amount)}</b><span class="muted">${p.date} · ${esc(p.method||'')} ${esc(p.note||'')}</span>
@@ -627,7 +651,7 @@ function vMoney(){
   <div class="card"><h3>每月收支盈利</h3><table><tr><th>月份</th><th>收入</th><th>支出</th><th>盈利</th></tr>
     ${keys.map(k=>{const p=(inc[k]||0)-(exp[k]||0);
       return `<tr><td>${k}</td><td>${money(inc[k]||0)}</td><td>${money(exp[k]||0)}</td><td style="color:${p>=0?'var(--green)':'var(--red)'};font-weight:700">${money(p)}</td></tr>`;}).join('')||'<tr><td colspan=4 class=muted>未有記錄</td></tr>'}
-    <tr style="font-weight:800;background:#f8fafc"><td>總計</td><td>${money(total)}</td><td>${money(totalExp)}</td><td style="color:${total-totalExp>=0?'var(--green)':'var(--red)'}">${money(total-totalExp)}</td></tr></table></div>
+    <tr style="font-weight:800;background:#16291e"><td>總計</td><td>${money(total)}</td><td>${money(totalExp)}</td><td style="color:${total-totalExp>=0?'var(--green)':'var(--red)'}">${money(total-totalExp)}</td></tr></table></div>
   <div class="card"><h3>最近收款（30筆）</h3>
     ${pays.length?pays.map(p=>`<div class="item row"><b>${money(p.amount)}</b><span>${esc(stuName(p.studentId))}</span>
       <span class="muted right">${p.date} ${esc(p.method||'')}</span></div>`).join(''):'<div class="muted">未有記錄</div>'}</div>`;
@@ -665,6 +689,14 @@ function vSettings(){
     <label>考試日租車費 (CAD)</label><input id="s_rental" type="number" inputmode="decimal" value="${cfg().rates.rental}">
     <button class="btn sm" style="margin-top:10px" onclick="cfg().rates={g2:Number(val('s_g2'))||0,g:Number(val('s_g'))||0,rental:Number(val('s_rental'))||0};save();alert('已更新收費')">儲存收費</button>
     <p class="muted" style="margin-bottom:0">呢度係<b>全局預設價</b>——學生冇設獨立時薪先會用。每個學生可以喺佢嘅資料入面設自己嘅時薪。考試日收費 = 租車費 + 時數 × 時薪。排堂時金額仍可逐堂自己改。</p></div>
+  <div class="card"><h3>📆 學生自助book堂（Google Calendar預約時段）</h3>
+    <p class="muted">喺Google Calendar設定「預約時段」後，將條booking link貼喺度，以後就可以一撳send俾學生自己揀時間。</p>
+    <label>你嘅booking link</label><input id="s_burl" placeholder="https://calendar.app.google/..." value="${esc(cfg().bookUrl||'')}">
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" onclick="cfg().bookUrl=val('s_burl');save();alert('已儲存')">儲存</button>
+      ${cfg().bookUrl?`<button class="btn green sm" onclick="navigator.clipboard.writeText(cfg().bookUrl).then(()=>alert('已複製，可以貼上WhatsApp俾學生'))">📄 複製link</button>
+      <button class="btn grey sm" onclick="window.open(cfg().bookUrl,'_blank')">預覽</button>`:''}
+    </div></div>
   <div class="card"><h3>💬 WhatsApp排堂確認訊息模板</h3>
     <textarea id="s_watpl" rows="9" style="font-size:13px">${esc(cfg().waTpl)}</textarea>
     <button class="btn sm" style="margin-top:8px" onclick="cfg().waTpl=document.getElementById('s_watpl').value;save();alert('已更新模板')">儲存模板</button>
@@ -700,7 +732,7 @@ function vSettings(){
     <p class="muted">每個教學項目下面加「步驟」（例：1.路邊停），每個步驟入面有「細動作」（例：a.睇右鏡 b.打右燈）。上堂記錄逐個步驟剔，細動作可展開參考。📋＝複製呢個步驟去其他項目。</p>
     ${cfg().topics.map(t=>{
       const steps=cfg().checks[t]||[];
-      return `<div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:10px">
+      return `<div style="margin-top:12px;padding:10px;background:#16291e;border-radius:10px">
       <div class="row"><b>${esc(t)}</b><button class="btn sm right" onclick="formStep('${esc(t)}')">＋ 加步驟</button></div>
       ${steps.length?steps.map((sp,i)=>`<div class="item">
         <div class="row"><b style="font-size:13px">${i+1}. ${esc(sp.s)}</b><span class="muted">${(sp.a||[]).length}個細動作</span>
@@ -719,7 +751,7 @@ function vSettings(){
     儲存用量：約 ${usage} MB（上限約5MB，相片會佔最多空間）</p></div>
   <div class="card"><h3>⚠️ 危險區</h3>
     <button class="btn red" onclick="if(confirm('確定清除所有資料？呢個動作冇得返轉頭！建議先匯出備份。')&&confirm('再次確認：全部學生資料將被刪除？')){DB=blank();save();}">清除所有資料</button>
-    <p class="muted" style="margin-bottom:0">版本 v5 · 2026-07-06</p></div>`;
+    <p class="muted" style="margin-bottom:0">版本 v7（賽車儀表）· 2026-07-07</p></div>`;
 }
 
 /* --- 名單管理 --- */
@@ -1011,7 +1043,7 @@ function renderChecks(){
   const selected=[...document.querySelectorAll('.f_topic:checked')].map(x=>x.value);
   const withChecks=selected.filter(t=>cfg().checks[t]&&cfg().checks[t].length);
   box.innerHTML = withChecks.length ? withChecks.map(t=>{
-    return '<div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px"><b style="font-size:13px">'+esc(t)+'</b>'
+    return '<div style="margin-top:8px;padding:8px;background:#16291e;border-radius:8px"><b style="font-size:13px">'+esc(t)+'</b>'
       +cfg().checks[t].map((sp,i)=>{
         const on=TMP_CHECKS[t]&&TMP_CHECKS[t][sp.s];
         return '<div style="margin-top:6px"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="chk" data-t="'+esc(t)+'" data-i="'+esc(sp.s)+'" '+(on?'checked':'')+'><b style="font-size:13px">'+(i+1)+'. '+esc(sp.s)+'</b></label>'
@@ -1025,9 +1057,9 @@ function renderChecks(){
     let stars='';
     for(let n=1;n<=5;n++){
       const on=(TMP_RATES[t]||0)>=n;
-      stars+='<span class="rstar" data-t="'+esc(t)+'" data-n="'+n+'" style="font-size:24px;cursor:pointer;padding:0 2px;color:'+(on?'var(--amber)':'#d5dbe5')+'">★</span>';
+      stars+='<span class="rstar" data-t="'+esc(t)+'" data-n="'+n+'" style="font-size:24px;cursor:pointer;padding:0 2px;color:'+(on?'var(--amber)':'#3c5747')+'">★</span>';
     }
-    return '<div class="row" style="margin-top:4px;padding:6px 8px;background:#f8fafc;border-radius:8px"><span style="font-size:13px">'+esc(t)+'</span><span class="right">'+stars+'</span></div>';
+    return '<div class="row" style="margin-top:4px;padding:6px 8px;background:#16291e;border-radius:8px"><span style="font-size:13px">'+esc(t)+'</span><span class="right">'+stars+'</span></div>';
   }).join('') : '<div class="muted">剔咗教學內容，評分星星就會喺度出現</div>';
 }
 function onRate(e){
