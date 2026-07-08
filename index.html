@@ -106,6 +106,7 @@ function DEF(){ return {
   centres:['Port Union','Metro East (Scarborough)','Downsview','Etobicoke','Newmarket','Brampton','Oshawa','其他'],
   cv:4,
   bookUrl:'',
+  rt:{c:12,x:3},
   waTpl:'你好 {name}！\n📅 排堂確認 Booking Confirmation\n━━━━━━━━━━\n日期 Date：{date}（{weekday}）\n時間 Time：{start} - {end}（{dur}小時/hrs）\n接送地點 Pickup：{loc}\n堂費 Fee：${fee} CAD\n━━━━━━━━━━\n收到請回覆「確認」✅\nPlease reply "OK" to confirm.\n多謝！Thank you!',
   curriculum:[
     {t:'G2 第1堂',track:'G2',k:[]},
@@ -171,6 +172,7 @@ function load(){
   });
   // v5遷移：檢查清單改兩層制（步驟→細動作），舊項目每項變一個步驟
   d.expenses = d.expenses || [];
+  d.roadtests = d.roadtests || [];
   const cks=d.config.checks||{};
   for(const k in cks){
     if(Array.isArray(cks[k]) && cks[k].length && typeof cks[k][0]==='string'){
@@ -181,7 +183,7 @@ function load(){
   d.config.cv=5;
   return d;
 }
-function blank(){ return {students:[], lessons:[], payments:[], exams:[], expenses:[], config:DEF()}; }
+function blank(){ return {students:[], lessons:[], payments:[], exams:[], expenses:[], roadtests:[], config:DEF()}; }
 function cfg(){ return DB.config; }
 function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
@@ -241,6 +243,8 @@ function waConfirm(lid){
 /* ================= 頁面切換 ================= */
 document.getElementById('nav').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
+  if(RT && !confirm('路試評分進行緊，未儲存。確定離開？')) return;
+  RT=null;
   TAB=b.dataset.t; VIEW_STUDENT=null;
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on', x===b));
   render();
@@ -249,6 +253,7 @@ document.getElementById('nav').addEventListener('click', e=>{
 function render(){
   document.getElementById('today').textContent = new Date().toLocaleDateString('zh-HK',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + ' · 多倫多';
   const m=document.getElementById('main');
+  if(RT){ m.innerHTML=vRoadTest(); return; }
   if(TAB==='dash') m.innerHTML=vDash();
   if(TAB==='students') m.innerHTML = VIEW_STUDENT ? vStudentDetail(VIEW_STUDENT) : vStudents();
   if(TAB==='schedule') m.innerHTML=vSchedule();
@@ -433,7 +438,23 @@ function vStudentDetail(id){
     <button class="btn amber" onclick="formExam(null,'${id}')">＋ 考試</button>
     ${s.phone?`<button class="btn green" onclick="wa('${esc(s.phone)}')">💬 WhatsApp</button>`:''}
     <button class="btn grey" onclick="report('${id}')">📋 進度報告</button>
+    <button class="btn red" onclick="rtStart('${id}')">🏁 模擬路試</button>
   </div>
+  ${(()=>{
+    const rts=DB.roadtests.filter(r=>r.studentId===id).sort((a,b)=>b.date.localeCompare(a.date));
+    if(!rts.length) return '';
+    return `<div class="card"><h3>🏁 模擬路試記錄</h3>${rts.map(r=>{
+      let c=0,x=0; for(const k in r.marks){ c+=r.marks[k].c||0; x+=r.marks[k].x||0; }
+      const v=rtFinalVerdict(r);
+      return `<div class="item row"><b>${r.date}</b><span class="tag a">${esc(r.type)}</span>
+        <span class="muted">✓${c} ✗${x}</span>
+        <span class="tag ${v==='pass'?'g':'r'}">${v==='pass'?'合格':'不合格'}</span>
+        <span class="right"></span>
+        <button class="btn grey sm" onclick="rtEdit('${r.id}')">✏️</button>
+        <button class="btn amber sm" onclick="rtSummary('${r.id}')">📄</button>
+        <button class="btn red sm" onclick="if(confirm('刪除呢次路試記錄？')){DB.roadtests=DB.roadtests.filter(z=>z.id!=='${r.id}');save();}">✕</button></div>`;
+    }).join('')}</div>`;
+  })()}
   ${exams.length?`<div class="card"><h3>🏁 考試記錄</h3>${exams.map(e=>`
     <div class="item row"><b>${esc(e.type)}路試</b><span>${e.date}</span><span class="muted">${esc(e.centre||'')}</span>
     <span class="tag ${e.result==='合格'?'g':e.result==='不合格'?'r':'a'}">${esc(e.result)}</span>
@@ -595,6 +616,223 @@ function printSum(lid){
   window.print();
 }
 
+/* ================= 模擬路試評分 ================= */
+const RT_SECTIONS=[
+ {id:'st',zh:'起步',en:'START',items:[
+  {zh:'安全裝置：尋找／調校／操作有問題',en:'Safety devices: locate / adjust / operate'},
+  {zh:'起步冇觀察／只靠倒後鏡',en:'Fails to observe / uses mirror only'},
+  {zh:'冇打燈／燈號不當',en:'Fails to signal / improper signal'},
+  {zh:'錯誤使用：極力子／迫力／油門／波檔',en:'Incorrect use: clutch / brake / accelerator / gears'}]},
+ {id:'bk',zh:'後退',en:'BACKING',items:[
+  {zh:'觀察不足：冇回頭望／只靠鏡',en:'Fails to observe / mirror only'},
+  {zh:'控制：軚盤／速度',en:'Control: steering / speed'},
+  {zh:'車輛位置不正',en:'Vehicle position'},
+  {zh:'錯誤使用：極力子／迫力／波檔／軚盤',en:'Incorrect use: clutch / brake / gears / steering'}]},
+ {id:'ta',zh:'掉頭',en:'TURNABOUT',items:[
+  {zh:'燈號問題',en:'Signalling'},
+  {zh:'控制／打軚方法／觀察／車輛位置',en:'Control / steering method / observation / vehicle position'},
+  {zh:'錯誤使用：極力子／迫力／波檔／軚盤',en:'Incorrect use: clutch / brake / gears / steering'}]},
+ {id:'da',zh:'沿路駕駛',en:'DRIVING ALONG',items:[
+  {zh:'跟車太貼／超車太貼／切入太早',en:'Follows / passes too closely / cuts in too soon'},
+  {zh:'行錯線／騎線行駛',en:'Improper lane choice / straddles lane'},
+  {zh:'冇檢查盲點／觀察不足',en:'Fails to check blindspot / observe properly'},
+  {zh:'轉線燈號：錯／早／遲／冇打／冇熄',en:'Lane change signal: wrong / early / late / not given / not cancelled'},
+  {zh:'讓先權：行人／自己／其他車',en:'Right-of-way: pedestrians / self / other vehicles'},
+  {zh:'唔小心：行人過路點／學校路口／緊急車輛',en:'Fails to use caution: crossovers / school / emergency vehicles'},
+  {zh:'唔遵守：行人過路點／學校路口／緊急車輛',en:'Fails to obey: crossovers / school / emergency vehicles'},
+  {zh:'速度：太快／太慢／阻礙交通',en:'Speed: too fast / slow for condition / impedes traffic'},
+  {zh:'錯誤使用：極力子／迫力／油門／波／軚／安全裝置',en:'Incorrect use: clutch / brake / accelerator / gears / steering / safety devices'}]},
+ {id:'ix',zh:'路口及鐵路口',en:'INTERSECTIONS / R.R. CROSSING',items:[
+  {zh:'觀察不足：有掣路口／無掣路口',en:'Fails to observe: controlled / uncontrolled'},
+  {zh:'唔遵守：標誌／燈號／路面標記',en:'Fails to obey: signs / signals / pavement markings'},
+  {zh:'太遲減速／太遲停車／太早慢車',en:'Late in: slowing / stopping / slows too soon'},
+  {zh:'停車位置：太早／阻斑馬線／阻路口',en:'Stopping position: too soon / blocks crosswalk / intersection'},
+  {zh:'讓先權：行人／自己／其他車',en:'Right-of-way: pedestrians / self / other vehicle'}]},
+ {id:'lt',zh:'左轉',en:'LEFT TURNS',items:[
+  {zh:'燈號：錯／早／遲／冇打／冇熄',en:'Signalling: wrong / early / late / not given / not cancelled'},
+  {zh:'未及時入正確位置／行車線',en:'Failed to get in proper position / lane'},
+  {zh:'讓先權：行人／自己／位置／其他車',en:'Right-of-way: ped. / self / position / other vehicles'},
+  {zh:'轉得太闊／入錯線',en:'Too wide: turns too wide / enters wrong lane'},
+  {zh:'切角／入錯線',en:'Too short: cuts corner / enters wrong lane'},
+  {zh:'打軚：方法／控制／回軚',en:'Steering: method / control / recovery'},
+  {zh:'速度：太快／入彎快／出彎快／太慢／阻礙',en:'Speed: too fast / fast enter / fast leave / too slow / impedes'},
+  {zh:'錯誤使用：極力子／迫力／油門／波檔',en:'Incorrect use: clutch / brake / accelerator / gears'}]},
+ {id:'rt2',zh:'右轉',en:'RIGHT TURNS',items:[
+  {zh:'燈號：錯／早／遲／冇打／冇熄',en:'Signalling: wrong / early / late / not given / not cancelled'},
+  {zh:'未及時入正確位置／行車線',en:'Failed to get in proper position / lane'},
+  {zh:'讓先權：行人／自己／位置／其他車',en:'Right-of-way: ped. / self / position / other vehicles'},
+  {zh:'轉得太闊／入錯線',en:'Too wide: turns too wide / enters wrong lane'},
+  {zh:'切角／入錯線',en:'Too short: cuts corner / enters wrong lane'},
+  {zh:'打軚：方法／控制／回軚',en:'Steering: method / control / recovery'},
+  {zh:'速度：太快／入彎快／出彎快／太慢／阻礙',en:'Speed: too fast / fast enter / fast leave / too slow / impedes'},
+  {zh:'錯誤使用：極力子／迫力／油門／波檔',en:'Incorrect use: clutch / brake / accelerator / gears'}]},
+ {id:'pk',zh:'泊車',en:'PARKING',items:[
+  {zh:'觀察不足：後退／離開／只靠鏡',en:'Fails to observe: backing / leaving / mirror only'},
+  {zh:'碰撞：物件／其他車／上壆',en:'Hits: objects / other vehicles / climbs curb'},
+  {zh:'車輛位置不正',en:'Incorrect vehicle position'},
+  {zh:'離開時冇打燈／燈號錯',en:'Fails to signal when leaving / incorrect signal'},
+  {zh:'錯誤使用：極力子／迫力／油門／波／軚',en:'Incorrect use: clutch / brake / accelerator / gears / steering'}]},
+ {id:'gr',zh:'斜路停車起步',en:'STOP, PARK AND START ON A GRADE',items:[
+  {zh:'觀察不足：唔正確／只靠鏡／離開前燈號',en:'Fails to observe: properly / mirror only / signals before leaving'},
+  {zh:'後溜：泊車時／起步時',en:'Rolls back: when parking / starting'},
+  {zh:'車轆冇擺好角度／車位不正',en:'Fails to angle wheels / incorrect vehicle position'},
+  {zh:'冇拉手掣／冇入正確波檔',en:'Fails to set parking brake / select proper gear'},
+  {zh:'錯誤使用：極力子／迫力／油門／波／軚',en:'Incorrect use: clutch / brake / accelerator / gears / steering'}]},
+ {id:'fw',zh:'高速公路',en:'FREEWAY',g:true,items:[
+  {zh:'匯入：速度／合流判斷／燈號／盲點',en:'Entering: speed / merge judgment / signal / blindspot'},
+  {zh:'匯出：太遲部署／速度／燈號',en:'Exiting: late positioning / speed / signal'},
+  {zh:'轉線：盲點／燈號／空間判斷',en:'Lane change: blindspot / signal / spacing'},
+  {zh:'車距太貼',en:'Following distance too close'},
+  {zh:'速度：太快／太慢／唔穩定',en:'Speed: too fast / too slow / inconsistent'}]}
+];
+let RT=null;
+
+function rtStart(sid){
+  openModal(`<h3>🏁 開始模擬路試</h3>
+  <p class="muted">學生：${esc(stuName(sid))}</p>
+  <div class="row" style="margin-top:14px">
+    <button class="btn" style="flex:1" onclick="rtNew('${sid}','G2')">G2 路試</button>
+    <button class="btn amber" style="flex:1" onclick="rtNew('${sid}','G')">Full G 路試</button>
+    <button class="btn grey" onclick="closeModal()">取消</button></div>`);
+}
+function rtNew(sid,type){
+  closeModal();
+  RT={id:null, studentId:sid, type:type, date:todayStr(), marks:{}, flags:{col:false,dan:false,vio:false}, notes:'', override:'auto'};
+  render();
+}
+function rtEdit(id){
+  const r=DB.roadtests.find(x=>x.id===id); if(!r) return;
+  RT=JSON.parse(JSON.stringify(r));
+  render();
+}
+function rtTally(){
+  let c=0,x=0;
+  for(const k in RT.marks){ c+=RT.marks[k].c||0; x+=RT.marks[k].x||0; }
+  return {c,x};
+}
+function rtAutoVerdict(r){
+  const flags=r.flags||{};
+  if(flags.col||flags.dan||flags.vio) return 'fail';
+  let c=0,x=0;
+  for(const k in r.marks){ c+=r.marks[k].c||0; x+=r.marks[k].x||0; }
+  if(x>cfg().rt.x || c>cfg().rt.c) return 'fail';
+  return 'pass';
+}
+function rtFinalVerdict(r){ return (r.override&&r.override!=='auto') ? r.override : rtAutoVerdict(r); }
+function rtMark(k,t){ RT.marks[k]=RT.marks[k]||{c:0,x:0}; RT.marks[k][t]++; render(); }
+function rtClearItem(k){ delete RT.marks[k]; render(); }
+function rtFlag(f){ RT.flags[f]=!RT.flags[f]; render(); }
+function rtCancel(){ if(confirm('取消呢次評分？未儲存嘅記錄會唔見。')){ RT=null; render(); } }
+function rtSave(){
+  RT.notes=(document.getElementById('rt_notes')||{value:RT.notes}).value;
+  if(!RT.id){ RT.id=uid(); DB.roadtests.push(RT); }
+  else{ const i=DB.roadtests.findIndex(x=>x.id===RT.id); if(i>=0) DB.roadtests[i]=RT; else DB.roadtests.push(RT); }
+  const saved=RT.id; RT=null; VIEW_STUDENT=DB.roadtests.find(x=>x.id===saved).studentId; TAB='students';
+  save(); rtSummary(saved);
+}
+function vRoadTest(){
+  const t=rtTally();
+  const v=rtFinalVerdict(RT);
+  const secs=RT_SECTIONS.filter(s=>!s.g||RT.type==='G');
+  return `
+  <div class="card">
+    <div class="row"><b style="font-size:16px">🏁 ${RT.type} 模擬路試 Mock Road Test</b>
+      <span class="tag a">${esc(stuName(RT.studentId))}</span><span class="muted right">${RT.date}</span></div>
+    <p class="muted" style="margin:8px 0 0">✓＝需改善 Improvement needed　✗＝缺乏技巧或判斷 Lack of skill／judgment<br>撳一下記一次，↺重設該項。</p>
+  </div>
+  <div class="card" style="position:sticky;top:70px;z-index:4">
+    <div class="row">
+      <span>✓ <b style="color:var(--amber)">${t.c}</b>／上限${cfg().rt.c}</span>
+      <span>✗ <b style="color:var(--red)">${t.x}</b>／上限${cfg().rt.x}</span>
+      <span class="right tag ${v==='pass'?'g':'r'}" style="font-size:14px;padding:4px 12px">${v==='pass'?'合格 PASS':'不合格 FAIL'}</span></div>
+  </div>
+  ${secs.map(s=>`<div class="card"><h3>${esc(s.zh)} <span class="muted" style="font-weight:400;font-size:11px">${esc(s.en)}</span></h3>
+    ${s.items.map((it,i)=>{
+      const k=s.id+'_'+i; const m=RT.marks[k]||{c:0,x:0};
+      return `<div class="item">
+        <div style="font-size:13px;font-weight:600">${i+1}. ${esc(it.zh)}</div>
+        <div class="row" style="margin-top:4px"><span class="muted" style="font-size:11px;flex:1">${esc(it.en)}</span>
+          <button class="btn sm" style="background:${m.c?'var(--amber)':'#24402f'};color:${m.c?'#fff':'var(--sub)'}" onclick="rtMark('${k}','c')">✓ ${m.c||''}</button>
+          <button class="btn sm" style="background:${m.x?'var(--red)':'#24402f'};color:${m.x?'#fff':'var(--sub)'}" onclick="rtMark('${k}','x')">✗ ${m.x||''}</button>
+          ${(m.c||m.x)?`<button class="btn grey sm" onclick="rtClearItem('${k}')">↺</button>`:''}</div>
+      </div>`;}).join('')}
+  </div>`).join('')}
+  <div class="card"><h3>⚠️ 即時不合格 Immediate fail</h3>
+    <div class="row">
+      <button class="btn sm" style="background:${RT.flags.col?'var(--red)':'#24402f'};color:${RT.flags.col?'#fff':'var(--sub)'}" onclick="rtFlag('col')">可避免碰撞 Preventable collision</button>
+      <button class="btn sm" style="background:${RT.flags.dan?'var(--red)':'#24402f'};color:${RT.flags.dan?'#fff':'var(--sub)'}" onclick="rtFlag('dan')">危險動作 Dangerous action</button>
+      <button class="btn sm" style="background:${RT.flags.vio?'var(--red)':'#24402f'};color:${RT.flags.vio?'#fff':'var(--sub)'}" onclick="rtFlag('vio')">違反交通例 Traffic law violation</button></div>
+  </div>
+  <div class="card"><h3>📝 備註同判定</h3>
+    <textarea id="rt_notes" rows="2" placeholder="備註（弱項、考試中心、路線...）">${esc(RT.notes||'')}</textarea>
+    <label>最終判定（可推翻自動計算）</label>
+    <select onchange="RT.override=this.value;render()">
+      <option value="auto" ${RT.override==='auto'?'selected':''}>自動判定（依門檻）</option>
+      <option value="pass" ${RT.override==='pass'?'selected':''}>手動：合格 PASS</option>
+      <option value="fail" ${RT.override==='fail'?'selected':''}>手動：不合格 FAIL</option></select>
+  </div>
+  <div class="row" style="margin:16px 0 30px">
+    <button class="btn green" style="flex:1" onclick="rtSave()">💾 儲存路試記錄</button>
+    <button class="btn red" onclick="rtCancel()">取消</button></div>`;
+}
+function rtText(r){
+  const s=stu(r.studentId)||{name:''};
+  let c=0,x=0; for(const k in r.marks){ c+=r.marks[k].c||0; x+=r.marks[k].x||0; }
+  const v=rtFinalVerdict(r);
+  let t='🏁 模擬路試結果 Mock Road Test Result\n━━━━━━━━━━━━━━\n';
+  t+='學生 Student：'+s.name+'\n類型 Type：'+r.type+'　日期 Date：'+r.date+'\n';
+  t+='✓ 需改善 Improvement：'+c+'次\n✗ 缺乏技巧 Lack of skill：'+x+'次\n';
+  const fl=[]; if(r.flags.col) fl.push('可避免碰撞 Collision'); if(r.flags.dan) fl.push('危險動作 Dangerous action'); if(r.flags.vio) fl.push('違反交通例 Violation');
+  if(fl.length) t+='⚠️ 即時不合格 Immediate fail：'+fl.join('、')+'\n';
+  t+='判定 Result：'+(v==='pass'?'✅ 合格 PASS':'❌ 不合格 FAIL')+'\n';
+  const lines=[];
+  RT_SECTIONS.forEach(sec=>{ sec.items.forEach((it,i)=>{
+    const m=r.marks[sec.id+'_'+i];
+    if(m&&(m.c||m.x)) lines.push('・'+sec.zh+'－'+it.zh+'：'+(m.c?'✓'+m.c:'')+(m.x?' ✗'+m.x:''));
+  });});
+  if(lines.length) t+='\n📌 扣分項目 Marked items：\n'+lines.join('\n')+'\n';
+  if(r.notes) t+='\n📝 備註 Notes：'+r.notes+'\n';
+  t+='\n日期 Generated：'+todayStr();
+  return t;
+}
+function rtSummary(id){
+  const r=DB.roadtests.find(x=>x.id===id); if(!r) return;
+  openModal(`<h3>🏁 路試擇要（${r.date}）</h3>
+  <textarea id="rpt" rows="14" readonly style="font-size:13px;margin-top:8px">${esc(rtText(r))}</textarea>
+  <div class="row" style="margin-top:12px">
+    <button class="btn" onclick="copyRpt()">📄 複製</button>
+    <button class="btn amber" onclick="rtPrint('${id}')">🖨️ 出PDF</button>
+    ${navigator.share?'<button class="btn green" onclick="shareRpt()">📤 分享</button>':''}
+    <button class="btn grey right" onclick="closeModal()">關閉</button></div>`);
+}
+function rtPrint(id){
+  const r=DB.roadtests.find(x=>x.id===id); if(!r) return;
+  const s=stu(r.studentId)||{name:''};
+  let c=0,x=0; for(const k in r.marks){ c+=r.marks[k].c||0; x+=r.marks[k].x||0; }
+  const v=rtFinalVerdict(r);
+  const rows=[];
+  RT_SECTIONS.filter(sec=>!sec.g||r.type==='G').forEach(sec=>{
+    rows.push('<tr style="background:#eee"><td colspan="3"><b>'+esc(sec.zh)+' '+esc(sec.en)+'</b></td></tr>');
+    sec.items.forEach((it,i)=>{
+      const m=r.marks[sec.id+'_'+i]||{c:0,x:0};
+      rows.push('<tr><td>'+(i+1)+'. '+esc(it.zh)+'<br><span style="color:#777;font-size:11px">'+esc(it.en)+'</span></td><td style="color:#b8860b;text-align:center">'+(m.c||'')+'</td><td style="color:#a00;text-align:center">'+(m.x||'')+'</td></tr>');
+    });
+  });
+  document.getElementById('printarea').innerHTML=`
+  <div style="font-family:-apple-system,'PingFang HK',sans-serif;padding:20px;color:#111;font-size:13px">
+    <h2 style="margin:0">🏁 模擬路試評分表 Mock Road Test（${r.type}）</h2>
+    <p style="color:#555;margin:6px 0">學生 Student：<b>${esc(s.name)}</b>　日期 Date：${r.date}</p>
+    <p><b>結果 Result：${v==='pass'?'✅ 合格 PASS':'❌ 不合格 FAIL'}</b>　✓需改善：${c}　✗缺乏技巧：${x}</p>
+    <table border="1" cellpadding="5" style="border-collapse:collapse;width:100%;font-size:12px">
+      <tr><th align="left">項目 Item</th><th style="width:50px">✓</th><th style="width:50px">✗</th></tr>
+      ${rows.join('')}
+    </table>
+    ${r.notes?'<p><b>備註 Notes：</b>'+esc(r.notes)+'</p>':''}
+    <p style="color:#888;font-size:11px">✓＝需改善 Improvement needed　✗＝缺乏技巧或判斷 Lack of skill or judgment · 此為教學用模擬評分，非官方考試結果</p>
+  </div>`;
+  window.print();
+}
+
 /* ================= 排堂頁 ================= */
 function vSchedule(){
   const up=DB.lessons.filter(l=>!isPast(l)).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
@@ -693,6 +931,11 @@ function vSettings(){
     <label>考試日租車費 (CAD)</label><input id="s_rental" type="number" inputmode="decimal" value="${cfg().rates.rental}">
     <button class="btn sm" style="margin-top:10px" onclick="cfg().rates={g2:Number(val('s_g2'))||0,g:Number(val('s_g'))||0,rental:Number(val('s_rental'))||0};save();alert('已更新收費')">儲存收費</button>
     <p class="muted" style="margin-bottom:0">呢度係<b>全局預設價</b>——學生冇設獨立時薪先會用。每個學生可以喺佢嘅資料入面設自己嘅時薪。考試日收費 = 租車費 + 時數 × 時薪。排堂時金額仍可逐堂自己改。</p></div>
+  <div class="card"><h3>🏁 模擬路試合格門檻</h3>
+    <label>✓（需改善）上限——超過就自動判不合格</label><input id="s_rtc" type="number" value="${cfg().rt.c}">
+    <label>✗（缺乏技巧）上限——超過就自動判不合格</label><input id="s_rtx" type="number" value="${cfg().rt.x}">
+    <button class="btn sm" style="margin-top:8px" onclick="cfg().rt={c:Number(val('s_rtc'))||12,x:Number(val('s_rtx'))||3};save();alert('已更新門檻')">儲存門檻</button>
+    <p class="muted" style="margin-bottom:0">MTO官方唔公開確實標準，呢個係你自己嘅訓練門檻。評分時你隨時可以手動推翻判定。</p></div>
   <div class="card"><h3>📆 學生自助book堂（Google Calendar預約時段）</h3>
     <p class="muted">喺Google Calendar設定「預約時段」後，將條booking link貼喺度，以後就可以一撳send俾學生自己揀時間。</p>
     <label>你嘅booking link</label><input id="s_burl" placeholder="https://calendar.app.google/..." value="${esc(cfg().bookUrl||'')}">
@@ -755,7 +998,7 @@ function vSettings(){
     儲存用量：約 ${usage} MB（上限約5MB，相片會佔最多空間）</p></div>
   <div class="card"><h3>⚠️ 危險區</h3>
     <button class="btn red" onclick="if(confirm('確定清除所有資料？呢個動作冇得返轉頭！建議先匯出備份。')&&confirm('再次確認：全部學生資料將被刪除？')){DB=blank();save();}">清除所有資料</button>
-    <p class="muted" style="margin-bottom:0">版本 v8（賽車儀表）· 2026-07-07</p></div>`;
+    <p class="muted" style="margin-bottom:0">版本 v9（賽車儀表＋模擬路試）· 2026-07-08</p></div>`;
 }
 
 /* --- 名單管理 --- */
@@ -977,6 +1220,7 @@ function delStudent(id){
   DB.lessons=DB.lessons.filter(l=>l.studentId!==id);
   DB.payments=DB.payments.filter(p=>p.studentId!==id);
   DB.exams=DB.exams.filter(e=>e.studentId!==id);
+  DB.roadtests=DB.roadtests.filter(r=>r.studentId!==id);
   VIEW_STUDENT=null; save();
 }
 
